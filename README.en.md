@@ -5,6 +5,7 @@
 **A Cross-Platform (Windows & Linux) Self-Evolving Autonomous AI Agent Framework**  
 *Combining OpenClaw's host execution power with Hermes Agent's hierarchical memory & skill evolution*
 
+[![CI](https://github.com/FanDuck/AetherClaw/actions/workflows/ci.yml/badge.svg)](https://github.com/FanDuck/AetherClaw/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-success.svg)](#)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18.0-339933.svg)](https://nodejs.org/)
@@ -30,7 +31,7 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/AetherClaw.git
+git clone https://github.com/FanDuck/AetherClaw.git
 cd AetherClaw
 
 # Start the Visual Web Console (http://127.0.0.1:3721)

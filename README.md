@@ -5,6 +5,7 @@
 **融合 OpenClaw 跨平台系统操控与 Hermes 长期记忆/自我进化的下一代开源 AI Agent 框架**  
 *A Cross-Platform (Windows & Linux) Self-Evolving Autonomous AI Agent Framework*
 
+[![CI](https://github.com/FanDuck/AetherClaw/actions/workflows/ci.yml/badge.svg)](https://github.com/FanDuck/AetherClaw/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-success.svg)](#)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18.0-339933.svg)](https://nodejs.org/)
@@ -81,7 +82,7 @@ flowchart TD
 ### 方式二：命令行启动
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/YOUR_USERNAME/AetherClaw.git
+git clone https://github.com/FanDuck/AetherClaw.git
 cd AetherClaw
 
 # 2. 启动可视化 Web 控制台（默认地址 http://127.0.0.1:3721）

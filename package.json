@@ -25,8 +25,16 @@
     "llm",
     "tool-calling"
   ],
-  "author": "AetherClaw Contributors",
+  "author": "FanDuck",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/FanDuck/AetherClaw.git"
+  },
+  "homepage": "https://github.com/FanDuck/AetherClaw#readme",
+  "bugs": {
+    "url": "https://github.com/FanDuck/AetherClaw/issues"
+  },
   "engines": {
     "node": ">=18.0.0"
   }
