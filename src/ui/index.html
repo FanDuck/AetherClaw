@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AetherClaw (灵爪) — Cross-Platform Self-Evolving Agent Console</title>
+  <style>
+    :root {
+      --bg-main: #0b0f19;
+      --bg-panel: #111827;
+      --bg-card: #1f2937;
+      --border: #374151;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --accent: #38bdf8;
+      --accent-purple: #a855f7;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Microsoft YaHei", sans-serif;
+      background: var(--bg-main);
+      color: var(--text-main);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    /* Top Header */
+    header {
+      height: 62px;
+      background: rgba(17, 24, 39, 0.92);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      flex-shrink: 0;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-logo {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-purple));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      box-shadow: 0 0 15px rgba(56, 189, 248, 0.35);
+    }
+    .brand-title {
+      font-weight: 700;
+      font-size: 18px;
+      letter-spacing: 0.3px;
+    }
+    .brand-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .badge {
+      padding: 5px 11px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--success);
+    }
+    .btn {
+      padding: 7px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text-main);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-primary {
+      background: linear-gradient(135deg, #0284c7, #7c3aed);
+      border: none;
+      color: #fff;
+    }
+    .btn-primary:hover { opacity: 0.92; color: #fff; }
+
+    /* Main Workspace Layout */
+    .workspace {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 410px;
+      overflow: hidden;
+    }
+
+    /* Left Chat & Execution Console */
+    .chat-column {
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .quick-bar {
+      padding: 10px 18px;
+      background: rgba(17, 24, 39, 0.6);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .quick-chip {
+      padding: 5px 11px;
+      border-radius: 6px;
+      font-size: 12px;
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: var(--accent);
+      cursor: pointer;
+      transition: 0.15s;
+    }
+    .quick-chip:hover {
+      background: rgba(56, 189, 248, 0.22);
+    }
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .msg {
+      max-width: 88%;
+      padding: 14px 16px;
+      border-radius: 12px;
+      line-height: 1.6;
+      font-size: 14px;
+    }
+    .msg-user {
+      align-self: flex-end;
+      background: linear-gradient(135deg, #0369a1, #4f46e5);
+      color: #fff;
+    }
+    .msg-agent {
+      align-self: flex-start;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      width: 88%;
+    }
+    .step-list {
+      margin-bottom: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .step-item {
+      background: rgba(31, 41, 55, 0.75);
+      border-left: 3px solid var(--accent);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 12.5px;
+    }
+    .step-item.tool_call { border-left-color: var(--accent-purple); }
+    .step-item.observation { border-left-color: var(--success); }
+    .step-item.warning { border-left-color: var(--warning); }
+    .step-title { font-weight: 600; color: #e5e7eb; margin-bottom: 3px; }
+    .step-detail {
+      color: var(--text-muted);
+      font-family: Consolas, Monaco, monospace;
+      font-size: 11.5px;
+      white-space: pre-wrap;
+      max-height: 140px;
+      overflow-y: auto;
+    }
+    .answer-body {
+      white-space: pre-wrap;
+      color: var(--text-main);
+    }
+    .answer-body code {
+      background: rgba(0, 0, 0, 0.35);
+      padding: 2px 5px;
+      border-radius: 4px;
+      font-family: Consolas, Monaco, monospace;
+      color: #7dd3fc;
+    }
+
+    /* Input Box */
+    .composer {
+      padding: 14px 18px;
+      background: var(--bg-panel);
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+    }
+    .composer textarea {
+      flex: 1;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-main);
+      padding: 10px 12px;
+      font-size: 14px;
+      resize: none;
+      height: 46px;
+      outline: none;
+    }
+    .composer textarea:focus { border-color: var(--accent); }
+
+    /* Right Inspector Sidebar */
+    .inspector {
+      background: var(--bg-panel);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .tabs {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      border-bottom: 1px solid var(--border);
+      background: rgba(11, 15, 25, 0.5);
+    }
+    .tab {
+      padding: 12px 8px;
+      text-align: center;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+    }
+    .tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+      background: rgba(56, 189, 248, 0.06);
+    }
+    .tab-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: none;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .tab-content.active { display: flex; }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .card-title { font-weight: 600; font-size: 13.5px; color: #f9fafb; }
+    .card-desc { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+    .tag {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 11px;
+      background: rgba(168, 85, 247, 0.16);
+      color: #d8b4fe;
+      margin-right: 4px;
+      margin-top: 6px;
+    }
+
+    /* Modal */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      width: 520px;
+      max-width: 94vw;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 22px;
+    }
+    .form-group { margin-bottom: 14px; }
+    .form-group label {
+      display: block;
+      font-size: 12.5px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 9px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text-main);
+      font-size: 13.5px;
+    }
+    .preset-row {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="brand-logo">🦅</div>
+      <div>
+        <div class="brand-title">AetherClaw (灵爪)</div>
+        <div class="brand-sub">OpenClaw 跨平台操控 × Hermes 记忆与自我进化框架</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="badge" id="osBadge">
+        <span class="dot"></span>
+        <span>正在检测系统...</span>
+      </div>
+      <div class="badge" id="modeBadge">
+        <span>模式: 检测中</span>
+      </div>
+      <button class="btn btn-primary" onclick="openSettings()">⚙️ API 零代码设置</button>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <!-- Left Chat & Execution Trace -->
+    <section class="chat-column">
+      <div class="quick-bar">
+        <span style="font-size:12px;color:var(--text-muted);">⚡ 一键实操指令:</span>
+        <button class="quick-chip" onclick="sendQuick('请对当前系统进行全面健康巡检')">🖥️ 系统健康巡检</button>
+        <button class="quick-chip" onclick="sendQuick('分析当前目录的文件结构')">📂 分析项目目录</button>
+        <button class="quick-chip" onclick="sendQuick('记住：我偏好结构化、带重点高亮的中文技术汇报')">🧠 写入长期记忆</button>
+        <button class="quick-chip" onclick="sendQuick('创建技能：高占用进程自动排查')">🧬 自我进化新技能</button>
+      </div>
+
+      <div class="messages" id="messages">
+        <div class="msg msg-agent">
+          <div class="answer-body">👋 欢迎使用 <strong>AetherClaw (灵爪)</strong> 开源智能体控制台！
+我融合了 <strong>OpenClaw</strong> 的 Windows/Linux 跨平台终端操控能力与 <strong>Hermes</strong> 的长期记忆 & 技能自我进化机制。
+
+• <strong>无需编程</strong>：直接点击上方「⚡ 一键实操指令」或在下方输入任务即可立刻体验真实的本地工具调用。
+• <strong>接入大模型</strong>：点击右上角「⚙️ API 零代码设置」，可一键配置 DeepSeek、OpenAI、通义千问或本地 Ollama 模型。</div>
+        </div>
+      </div>
+
+      <div class="composer">
+        <textarea id="promptInput" placeholder="输入你的指令（例如：巡检电脑状态 / 分析当前目录 / 记住我的偏好 / 创建技能... 回车发送）" onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();sendMessage();}"></textarea>
+        <button class="btn btn-primary" id="sendBtn" onclick="sendMessage()">发送指令 🚀</button>
+      </div>
+    </section>
+
+    <!-- Right Inspector Panel -->
+    <aside class="inspector">
+      <div class="tabs">
+        <div class="tab active" onclick="switchTab('skills', this)">🧬 技能进化库</div>
+        <div class="tab" onclick="switchTab('memories', this)">🧠 长期记忆</div>
+        <div class="tab" onclick="switchTab('system', this)">🛠️ 系统与工具</div>
+      </div>
+
+      <!-- Tab 1: Self-Evolving Skills -->
+      <div class="tab-content active" id="tab-skills">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:12.5px;color:var(--text-muted);">Hermes 技能库 (`skills/*.md`)</span>
+          <button class="btn" style="padding:4px 10px;font-size:12px;" onclick="sendQuick('创建技能：自动化日志巡检')">+ 自动进化新技能</button>
+        </div>
+        <div id="skillsList" style="display:flex;flex-direction:column;gap:10px;"></div>
+      </div>
+
+      <!-- Tab 2: Long-Term Semantic Memories -->
+      <div class="tab-content" id="tab-memories">
+        <div style="display:flex;gap:6px;">
+          <input id="newMemInput" placeholder="手动添加一条长期记忆..." style="flex:1;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-card);color:#fff;font-size:12.5px;" />
+          <button class="btn btn-primary" style="padding:6px 12px;font-size:12px;" onclick="addManualMemory()">添加</button>
+        </div>
+        <div id="memoriesList" style="display:flex;flex-direction:column;gap:10px;"></div>
+      </div>
+
+      <!-- Tab 3: System Environment & Tools -->
+      <div class="tab-content" id="tab-system">
+        <div class="card" id="sysDetailCard"></div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-top:4px;">OpenClaw 跨平台工具集</div>
+        <div id="toolsList" style="display:flex;flex-direction:column;gap:8px;"></div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Zero-Code API Configuration Modal -->
+  <div class="modal-backdrop" id="settingsModal">
+    <div class="modal">
+      <h3 style="margin-bottom:8px;">⚙️ 大模型 API 零代码配置</h3>
+      <p style="font-size:12.5px;color:var(--text-muted);margin-bottom:14px;">
+        配置保存在本地 <code>data/config.local.json</code>（已被 <code>.gitignore</code> 保护，上传 GitHub 时绝不会泄露你的密钥）。
+      </p>
+      <div class="preset-row">
+        <button class="quick-chip" onclick="applyPreset('https://api.deepseek.com/v1', 'deepseek-chat')">DeepSeek 官方</button>
+        <button class="quick-chip" onclick="applyPreset('https://api.openai.com/v1', 'gpt-4o-mini')">OpenAI 官方</button>
+        <button class="quick-chip" onclick="applyPreset('https://dashscope.aliyuncs.com/compatible-mode/v1', 'qwen-plus')">通义千问 (Qwen)</button>
+        <button class="quick-chip" onclick="applyPreset('http://127.0.0.1:11434/v1', 'qwen2.5:7b')">Ollama 本地免费模型</button>
+      </div>
+      <div class="form-group">
+        <label>API 接口地址 (Base URL)</label>
+        <input id="cfgBaseUrl" placeholder="https://api.deepseek.com/v1" />
+      </div>
+      <div class="form-group">
+        <label>模型名称 (Model Name)</label>
+        <input id="cfgModel" placeholder="deepseek-chat" />
+      </div>
+      <div class="form-group">
+        <label>API Key 密钥 (留空则保持原密钥或使用免 Key 本地模式)</label>
+        <input id="cfgApiKey" type="password" placeholder="sk-..." />
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px;">
+        <button class="btn" onclick="closeSettings()">取消</button>
+        <button class="btn btn-primary" onclick="saveSettings()">保存并生效</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let appState = {};
+
+    async function loadStatus() {
+      const res = await fetch('/api/status');
+      appState = await res.json();
+      renderDashboard();
+    }
+
+    function renderDashboard() {
+      const { system, config, skills, memories, tools } = appState;
+      document.getElementById('osBadge').innerHTML = `<span class="dot"></span><span>${system.osType} (${system.shell})</span>`;
+      document.getElementById('modeBadge').innerHTML = config.hasApiKey
+        ? `<span>🟢 大模型已连接 (${config.model})</span>`
+        : `<span>⚡ 免 Key 本地自主模式</span>`;
+
+      // Render Skills
+      const skillsEl = document.getElementById('skillsList');
+      skillsEl.innerHTML = (skills || []).map(s => `
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🧬 ${s.name}</span>
+            <button class="quick-chip" onclick="sendQuick('执行技能: ${s.name}')">运行</button>
+          </div>
+          <div class="card-desc">${s.description}</div>
+          <div>${(s.triggerKeywords || []).map(k => `<span class="tag">${k}</span>`).join('')}</div>
+        </div>
+      `).join('');
+
+      // Render Memories
+      const memEl = document.getElementById('memoriesList');
+      memEl.innerHTML = (memories || []).map(m => `
+        <div class="card">
+          <div class="card-header">
+            <span class="tag" style="margin:0;">${m.category}</span>
+            <button class="btn" style="padding:2px 7px;font-size:11px;" onclick="deleteMemory('${m.id}')">删除</button>
+          </div>
+          <div class="card-desc" style="color:#f3f4f6;margin-top:6px;">${m.content}</div>
+        </div>
+      `).join('');
+
+      // Render System & Tools
+      document.getElementById('sysDetailCard').innerHTML = `
+        <div class="card-title" style="margin-bottom:6px;">🖥️ 主机实时环境</div>
+        <div class="card-desc">
+          • 系统: ${system.osType} (${system.release} / ${system.arch})<br/>
+          • 终端: ${system.shell}<br/>
+          • CPU: ${system.cpuModel} (${system.cpuCores} 核)<br/>
+          • 内存: ${system.memory}<br/>
+          • Node: ${system.nodeVersion}
+        </div>
+      `;
+      document.getElementById('toolsList').innerHTML = (tools || []).map(t => `
+        <div class="card" style="padding:9px 12px;">
+          <div class="card-title" style="font-size:12.5px;color:#38bdf8;">🔧 ${t.name}</div>
+          <div class="card-desc">${t.description}</div>
+        </div>
+      `).join('');
+    }
+
+    function switchTab(tabId, el) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      el.classList.add('active');
+      document.getElementById('tab-' + tabId).classList.add('active');
+    }
+
+    function sendQuick(text) {
+      document.getElementById('promptInput').value = text;
+      sendMessage();
+    }
+
+    async function sendMessage() {
+      const input = document.getElementById('promptInput');
+      const prompt = input.value.trim();
+      if (!prompt) return;
+      input.value = '';
+
+      const messagesEl = document.getElementById('messages');
+      messagesEl.innerHTML += `<div class="msg msg-user">${escapeHtml(prompt)}</div>`;
+
+      const loadingId = 'loading_' + Date.now();
+      messagesEl.innerHTML += `<div class="msg msg-agent" id="${loadingId}"><div class="answer-body">🦅 AetherClaw 正在规划并调用跨平台工具...</div></div>`;
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt })
+        });
+        const data = await res.json();
+        const stepsHtml = (data.steps || []).map(st => {
+          const detail = st.detail || (st.args ? JSON.stringify(st.args) : '') || (st.result ? JSON.stringify(st.result, null, 2) : '');
+          return `
+            <div class="step-item ${st.type}">
+              <div class="step-title">⚡ ${escapeHtml(st.title || st.type)}</div>
+              ${detail ? `<div class="step-detail">${escapeHtml(detail)}</div>` : ''}
+            </div>
+          `;
+        }).join('');
+
+        document.getElementById(loadingId).innerHTML = `
+          ${stepsHtml ? `<div class="step-list">${stepsHtml}</div>` : ''}
+          <div class="answer-body">${formatAnswer(data.finalAnswer || data.error || '执行完成')}</div>
+        `;
+
+        if (data.memories) appState.memories = data.memories;
+        if (data.skills) appState.skills = data.skills;
+        renderDashboard();
+      } catch (err) {
+        document.getElementById(loadingId).innerHTML = `<div class="answer-body" style="color:var(--danger);">执行出错: ${escapeHtml(err.message)}</div>`;
+      }
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    async function addManualMemory() {
+      const input = document.getElementById('newMemInput');
+      const content = input.value.trim();
+      if (!content) return;
+      input.value = '';
+      const res = await fetch('/api/memory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content, category: 'manual_note' })
+      });
+      const data = await res.json();
+      appState.memories = data.memories;
+      renderDashboard();
+    }
+
+    async function deleteMemory(id) {
+      const res = await fetch('/api/memory/' + encodeURIComponent(id), { method: 'DELETE' });
+      const data = await res.json();
+      appState.memories = data.memories;
+      renderDashboard();
+    }
+
+    function openSettings() {
+      const cfg = appState.config || {};
+      document.getElementById('cfgBaseUrl').value = cfg.baseUrl || '';
+      document.getElementById('cfgModel').value = cfg.model || '';
+      document.getElementById('cfgApiKey').value = '';
+      document.getElementById('cfgApiKey').placeholder = cfg.apiKeyMasked ? `已保存 (${cfg.apiKeyMasked})，留空则不修改` : 'sk-...';
+      document.getElementById('settingsModal').classList.add('open');
+    }
+
+    function closeSettings() {
+      document.getElementById('settingsModal').classList.remove('open');
+    }
+
+    function applyPreset(baseUrl, model) {
+      document.getElementById('cfgBaseUrl').value = baseUrl;
+      document.getElementById('cfgModel').value = model;
+    }
+
+    async function saveSettings() {
+      const baseUrl = document.getElementById('cfgBaseUrl').value.trim();
+      const model = document.getElementById('cfgModel').value.trim();
+      const apiKey = document.getElementById('cfgApiKey').value.trim();
+      const res = await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ baseUrl, model, apiKey })
+      });
+      const data = await res.json();
+      appState.config = data.config;
+      closeSettings();
+      renderDashboard();
+    }
+
+    function escapeHtml(str) {
+      return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function formatAnswer(str) {
+      return escapeHtml(str)
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/`([^`\n]+)`/g, '<code>$1</code>');
+    }
+
+    loadStatus();
+  </script>
+</body>
+</html>

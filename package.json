@@ -1,0 +1,33 @@
+{
+  "name": "aetherclaw",
+  "version": "1.0.0",
+  "description": "AetherClaw (灵爪) - A Cross-Platform (Windows & Linux) Self-Evolving Autonomous AI Agent Framework inspired by OpenClaw & Hermes.",
+  "main": "src/index.js",
+  "bin": {
+    "aetherclaw": "./bin/aetherclaw.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "web": "node src/index.js --web",
+    "cli": "node src/index.js --cli",
+    "test": "node --test tests/agent.test.js"
+  },
+  "keywords": [
+    "ai-agent",
+    "autonomous-agent",
+    "openclaw",
+    "hermes-agent",
+    "self-evolving",
+    "memory",
+    "cross-platform",
+    "windows",
+    "linux",
+    "llm",
+    "tool-calling"
+  ],
+  "author": "AetherClaw Contributors",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "id": "sys_health_check",
+  "name": "跨平台系统健康巡检 (System Health Check)",
+  "description": "自动检测当前 Windows 或 Linux 系统的 CPU、内存、磁盘空间与运行环境状态，生成诊断报告。",
+  "triggerKeywords": [
+    "巡检",
+    "健康",
+    "系统状态",
+    "电脑状态",
+    "health",
+    "diagnostic",
+    "status"
+  ],
+  "steps": [
+    "调用 system_info 工具获取操作系统、CPU 核心数、内存占用等核心指标",
+    "在 Windows 下使用 PowerShell (Get-PSDrive C) 或在 Linux 下使用 (df -h /) 检查磁盘空间",
+    "汇总各项指标并向用户输出结构化的健康诊断建议"
+  ],
+  "commandTemplate": {
+    "win32": "Get-PSDrive -PSProvider FileSystem | Select-Object Name, @{Name=\"Used(GB)\";Expression={[math]::round($_.Used/1GB,2)}}, @{Name=\"Free(GB)\";Expression={[math]::round($_.Free/1GB,2)}} | Format-Table -AutoSize",
+    "linux": "df -h --output=source,size,used,avail,pcent,target -x tmpfs -x devtmpfs"
+  },
+  "version": "1.0.0",
+  "usageCount": 1,
+  "createdAt": "2026-10-28T23:53:07.453Z",
+  "author": "AetherClaw Built-in"
+}

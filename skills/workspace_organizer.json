@@ -1,0 +1,26 @@
+{
+  "id": "workspace_organizer",
+  "name": "项目目录结构分析与整理 (Workspace Analyzer)",
+  "description": "扫描指定文件夹下的文件结构、统计各类文件数量并生成清晰的目录概览。",
+  "triggerKeywords": [
+    "整理",
+    "目录",
+    "分析文件夹",
+    "文件列表",
+    "workspace",
+    "tree"
+  ],
+  "steps": [
+    "调用 file_list 工具列出目标路径下的全部文件与子文件夹",
+    "按文件扩展名分类统计数量与大小",
+    "生成可视化的 Markdown 结构说明或整理建议"
+  ],
+  "commandTemplate": {
+    "win32": "Get-ChildItem -Force | Select-Object Mode, LastWriteTime, Length, Name | Format-Table -AutoSize",
+    "linux": "ls -la"
+  },
+  "version": "1.0.0",
+  "usageCount": 1,
+  "createdAt": "2026-10-28T23:53:07.453Z",
+  "author": "AetherClaw Built-in"
+}

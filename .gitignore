@@ -1,0 +1,13 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Local Configuration & Secrets (Never commit your API keys!)
+.env
+data/config.local.json
+
+# Runtime Data & Logs
+logs/
+*.log
+.DS_Store
+Thumbs.db
