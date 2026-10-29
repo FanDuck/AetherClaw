@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#070b14"/>
+      <stop offset="50%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e1b4b"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="50%" stop-color="#818cf8"/>
+      <stop offset="100%" stop-color="#c084fc"/>
+    </linearGradient>
+    <linearGradient id="cardGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#0f172a" stop-opacity="0.9"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="16" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="360" rx="18" fill="url(#bgGrad)"/>
+
+  <!-- Decorative Grid Lines -->
+  <g stroke="#334155" stroke-width="0.6" stroke-opacity="0.35">
+    <line x1="0" y1="60" x2="1200" y2="60"/>
+    <line x1="0" y1="120" x2="1200" y2="120"/>
+    <line x1="0" y1="180" x2="1200" y2="180"/>
+    <line x1="0" y1="240" x2="1200" y2="240"/>
+    <line x1="0" y1="300" x2="1200" y2="300"/>
+    <line x1="200" y1="0" x2="200" y2="360"/>
+    <line x1="400" y1="0" x2="400" y2="360"/>
+    <line x1="600" y1="0" x2="600" y2="360"/>
+    <line x1="800" y1="0" x2="800" y2="360"/>
+    <line x1="1000" y1="0" x2="1000" y2="360"/>
+  </g>
+
+  <!-- Glowing Orbs -->
+  <circle cx="150" cy="90" r="95" fill="#0284c7" fill-opacity="0.18" filter="url(#glow)"/>
+  <circle cx="1050" cy="270" r="120" fill="#7c3aed" fill-opacity="0.18" filter="url(#glow)"/>
+
+  <!-- Left Brand Emblem -->
+  <g transform="translate(80, 78)">
+    <rect width="96" height="96" rx="22" fill="url(#accentGrad)"/>
+    <rect x="4" y="4" width="88" height="88" rx="19" fill="#0b1120"/>
+    <path d="M26 66 C30 42, 46 28, 70 24 C56 38, 48 50, 46 68 Z" fill="url(#accentGrad)"/>
+    <path d="M36 72 C42 52, 54 40, 74 36 C62 48, 56 58, 54 72 Z" fill="#38bdf8"/>
+    <circle cx="62" cy="32" r="4" fill="#f8fafc"/>
+  </g>
+
+  <!-- Title & Subtitle -->
+  <text x="200" y="122" font-family="Segoe UI, PingFang SC, Microsoft YaHei, sans-serif" font-size="46" font-weight="800" fill="#f8fafc">
+    AetherClaw <tspan fill="url(#accentGrad)">灵爪</tspan>
+  </text>
+  <text x="202" y="160" font-family="Segoe UI, PingFang SC, Microsoft YaHei, sans-serif" font-size="19" font-weight="500" fill="#cbd5e1">
+    OpenClaw 跨平台本地操控 × Hermes 三层记忆与技能自我进化 AI Agent 框架
+  </text>
+  <text x="202" y="188" font-family="Consolas, Monaco, monospace" font-size="14" fill="#64748b">
+    Cross-Platform (Windows PowerShell &amp; Linux Bash) • Self-Evolving SKILL.md • Zero-Code Web Console
+  </text>
+
+  <!-- Feature Cards Row -->
+  <g transform="translate(80, 224)">
+    <!-- Card 1 -->
+    <rect x="0" y="0" width="325" height="92" rx="12" fill="url(#cardGrad)" stroke="#38bdf8" stroke-opacity="0.45"/>
+    <text x="20" y="34" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="700" fill="#38bdf8">🦞 OpenClaw 跨平台执行引擎</text>
+    <text x="20" y="60" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="13" fill="#94a3b8">Windows PowerShell &amp; Linux Bash 双原生适配</text>
+    <text x="20" y="78" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="12" fill="#64748b">内置文件读写、目录分析、网页抓取与高危命令护栏</text>
+
+    <!-- Card 2 -->
+    <rect x="355" y="0" width="325" height="92" rx="12" fill="url(#cardGrad)" stroke="#a855f7" stroke-opacity="0.45"/>
+    <text x="375" y="34" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="700" fill="#c084fc">🪽 Hermes 记忆与技能自我进化</text>
+    <text x="375" y="60" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="13" fill="#94a3b8">情景记忆 + 语义记忆 + SKILL.md 自动沉淀</text>
+    <text x="375" y="78" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="12" fill="#64748b">把复杂操作自动转化为可复用技能，越用越聪明</text>
+
+    <!-- Card 3 -->
+    <rect x="710" y="0" width="330" height="92" rx="12" fill="url(#cardGrad)" stroke="#22c55e" stroke-opacity="0.45"/>
+    <text x="730" y="34" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="700" fill="#4ade80">🖥️ 零代码 Web 控制台 + 终端 CLI</text>
+    <text x="730" y="60" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="13" fill="#94a3b8">双击一键启动 • 免 API Key 本地自主模式</text>
+    <text x="730" y="78" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="12" fill="#64748b">支持 DeepSeek / OpenAI / 通义千问 / Ollama</text>
+  </g>
+</svg>

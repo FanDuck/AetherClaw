@@ -1,0 +1,24 @@
+{
+  "id": "custom_93324",
+  "name": "高占用进程自动排查",
+  "description": "由用户指令「创建技能：高占用进程自动排查」自动进化生成的跨平台可复用技能。",
+  "triggerKeywords": [
+    "高占用进程自动排查",
+    "自动化",
+    "custom"
+  ],
+  "steps": [
+    "1. 自动检测当前操作系统环境 (Windows PowerShell / Linux Bash)",
+    "2. 执行对应的系统状态检查与目录扫描",
+    "3. 输出结构化执行报告并更新技能调用计数"
+  ],
+  "commandTemplate": {
+    "win32": "Get-Process | Sort-Object CPU -Descending | Select-Object -First 5 Name, Id, CPU",
+    "linux": "ps aux --sort=-%cpu | head -n 6"
+  },
+  "version": "1.0.0",
+  "usageCount": 1,
+  "createdAt": "2026-10-29T00:01:33.324Z",
+  "updatedAt": "2026-10-29T00:01:33.324Z",
+  "author": "AetherClaw Self-Evolution"
+}
