@@ -1,10 +1,4 @@
-<div align="center">
 
-<img src="assets/logo.png" alt="AetherClaw Logo" width="96" />
-
-<img src="assets/banner.svg" alt="AetherClaw (灵爪) Banner" width="100%" />
-
-<br/>
 
 # AetherClaw (灵爪)
 
