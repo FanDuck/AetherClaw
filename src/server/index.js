@@ -243,26 +243,37 @@ function createServer(opts = {}) {
           'Connection': 'keep-alive',
           'X-Accel-Buffering': 'no'
         }));
+        const reqAbort = new AbortController();
+        res.on('close', () => {
+          if (!res.writableEnded) reqAbort.abort();
+        });
         const send = (event, data) => {
-          if (!res.writableEnded) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+          if (!res.writableEnded && !reqAbort.signal.aborted) {
+            res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+          }
         };
         busy++;
         try {
           const result = await agent.run(prompt, (step) => send('step', step), {
-            onToken: (delta) => send('token', { delta })
+            onToken: (delta) => send('token', { delta }),
+            signal: reqAbort.signal
           });
-          send('done', {
-            mode: result.mode,
-            finalAnswer: result.finalAnswer,
-            memories: memory.state.semanticMemories,
-            skills: memory.listSkills(),
-            episodes: memory.state.episodicHistory.slice(0, 15)
-          });
+          if (!reqAbort.signal.aborted) {
+            send('done', {
+              mode: result.mode,
+              finalAnswer: result.finalAnswer,
+              memories: memory.state.semanticMemories,
+              skills: memory.listSkills(),
+              episodes: memory.state.episodicHistory.slice(0, 15)
+            });
+          }
         } catch (err) {
-          send('error', { error: err.message || 'Agent failed' });
+          if (!reqAbort.signal.aborted) {
+            send('error', { error: err.message || 'Agent failed' });
+          }
         } finally {
           busy--;
-          res.end();
+          if (!res.writableEnded) res.end();
         }
         return;
       }

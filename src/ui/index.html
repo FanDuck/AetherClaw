@@ -535,15 +535,18 @@
     function renderSettingsVault() {
       const c = state.config || {};
       const profiles = c.apiProfiles || [];
+      const isLocalUrl = /(^|\/\/)(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(c.baseUrl || '');
       const badge = $('#activeKeyStatusBadge');
       if (badge) {
         badge.innerHTML = c.hasApiKey
           ? `<span class="dot"></span><span>已配置 Key (${esc(c.apiKeyMasked)}) · ${esc(c.model)}</span>`
-          : `<span class="dot off" style="background:var(--amber)"></span><span>当前为免 Key 本地自主模式</span>`;
+          : (isLocalUrl
+              ? `<span class="dot"></span><span>本地模型 (${esc(c.model)})</span>`
+              : `<span class="dot off" style="background:var(--amber)"></span><span>当前为免 Key 本地自主模式</span>`);
       }
       const clrBtn = $('#clearActiveKeyBtn');
       if (clrBtn) {
-        clrBtn.style.display = c.hasApiKey ? 'inline-flex' : 'none';
+        clrBtn.style.display = (c.hasApiKey || isLocalUrl) ? 'inline-flex' : 'none';
       }
       const countLbl = $('#vaultCountLbl');
       if (countLbl) countLbl.textContent = `${profiles.length} 个已存密钥档案`;
@@ -835,11 +838,13 @@
       const r = await (await api('/api/config/apikey', { method: 'DELETE' })).json();
       if (r.error) return toast(r.error, true);
       state.config = r.config;
+      $('#cfgProfileName').value = r.config.providerName || '';
+      $('#cfgBaseUrl').value = r.config.baseUrl || '';
       $('#cfgApiKey').value = '';
       $('#cfgApiKey').placeholder = '已清除 API Key（当前处于免 Key 本地自主模式）';
-      showTestBanner('🗑️ 已删除当前激活的 API Key，系统已切回「⚡ 免 Key 本地自主模式」。', true);
+      showTestBanner('🗑️ 已清除当前激活的 API Key，系统已切回「⚡ 免 Key 本地自主模式」。', true);
       render();
-      toast('🗑️ 已删除当前激活的 API Key');
+      toast('🗑️ 已切回免 Key 本地模式');
     };
     $('#testConnBtn').onclick = () => runConnectivityTest();
     $('#addProfileBtn').onclick = async () => {

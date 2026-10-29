@@ -490,3 +490,28 @@ test('22. API Key Vault (add/switch/delete/clear) & real-time API connectivity t
     mockLLM.close();
   }
 });
+
+test('23. Edge-case fixes: saveProfile reuses active key & deduplicates, clearApiKey resets local LLM URL, and AbortSignal cancels run cleanly', async () => {
+  // 1) Set an active API key via update(), then call saveProfile() without passing apiKey -> reuses active key and deduplicates
+  config.update({ baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat', apiKey: 'sk-active-reuse-key-9999' });
+  const afterFirst = config.saveProfile({ name: '复用测试', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat', apiKey: '' });
+  assert.equal(afterFirst.apiProfiles.length, 1);
+  assert.equal(afterFirst.apiProfiles[0].apiKeyMasked, 'sk-a...9999');
+
+  // Calling saveProfile again with identical name+baseUrl+model updates in-place instead of duplicating
+  const afterSecond = config.saveProfile({ name: '复用测试', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat', apiKey: '' });
+  assert.equal(afterSecond.apiProfiles.length, 1);
+  config.deleteProfile(afterSecond.apiProfiles[0].id);
+
+  // 2) If baseUrl was set to local Ollama (http://127.0.0.1:11434/v1), clearApiKey resets baseUrl so zero-key local mode is restored
+  config.update({ baseUrl: 'http://127.0.0.1:11434/v1', model: 'qwen2.5:7b' });
+  const resetCfg = config.update({ clearApiKey: true });
+  assert.equal(resetCfg.baseUrl, 'https://api.deepseek.com/v1');
+  assert.equal(resetCfg.hasApiKey, false);
+
+  // 3) Pre-aborted AbortSignal cancels agent.run cleanly without falling back to local engine
+  const ac = new AbortController();
+  ac.abort();
+  const abortedRes = await agent.run('请对当前系统进行全面健康巡检', null, { signal: ac.signal });
+  assert.equal(abortedRes.mode, 'aborted');
+});

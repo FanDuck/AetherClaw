@@ -189,6 +189,10 @@ class ConfigManager {
     if (partial.clearApiKey === true) {
       next.apiKey = '';
       next.activeProfileId = '';
+      if (isLocalEndpoint(next.baseUrl)) {
+        next.baseUrl = 'https://api.deepseek.com/v1';
+        next.providerName = 'DeepSeek / OpenAI Compatible';
+      }
     }
     if (typeof partial.model === 'string' && partial.model.trim() !== '') next.model = partial.model.trim();
     if (typeof partial.allowShellExec === 'boolean') next.allowShellExec = partial.allowShellExec;
@@ -239,8 +243,10 @@ class ConfigManager {
     const providerName = String(input.providerName || inferProviderName(baseUrl)).trim();
     const name = String(input.name || `${providerName} · ${model}`).trim();
     const profiles = Array.isArray(this.config.apiProfiles) ? [...this.config.apiProfiles] : [];
-    const existingIdx = input.id ? profiles.findIndex(p => p.id === input.id) : -1;
-    const prevKey = existingIdx >= 0 ? profiles[existingIdx].apiKey : '';
+    const existingIdx = input.id
+      ? profiles.findIndex(p => p.id === input.id)
+      : profiles.findIndex(p => p.name === name && p.baseUrl === baseUrl && p.model === model);
+    const prevKey = existingIdx >= 0 ? profiles[existingIdx].apiKey : (this.config.apiKey || '');
     const apiKey = typeof input.apiKey === 'string' && input.apiKey.trim() !== '' ? input.apiKey.trim() : prevKey;
 
     if (!apiKey && !isLocalEndpoint(baseUrl)) {
@@ -444,15 +450,28 @@ class ConfigManager {
     }
     const headers = { Accept: 'application/json' };
     if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
-    const res = await fetch(`${baseUrl}/models`, {
-      method: 'GET',
-      headers,
-      signal: AbortSignal.timeout(8000)
-    });
-    if (!res.ok) {
-      throw Object.assign(new Error(`获取模型列表失败 (HTTP ${res.status})`), { status: res.status });
+    let res;
+    try {
+      res = await fetch(`${baseUrl}/models`, {
+        method: 'GET',
+        headers,
+        signal: AbortSignal.timeout(8000)
+      });
+    } catch (err) {
+      throw Object.assign(new Error(`无法连接模型接口 ${baseUrl}/models (${err.message})`), { status: 400 });
     }
-    const json = await res.json();
+    if (!res.ok) {
+      throw Object.assign(
+        new Error(res.status === 401 || res.status === 403 ? `API Key 无效或无权限 (HTTP ${res.status})` : `获取模型列表失败 (HTTP ${res.status})`),
+        { status: 400 }
+      );
+    }
+    let json = {};
+    try {
+      json = await res.json();
+    } catch (_) {
+      throw Object.assign(new Error('接口未返回有效的 JSON 模型列表'), { status: 400 });
+    }
     const list = Array.isArray(json.data)
       ? json.data.map(m => m.id || m.name).filter(Boolean)
       : (Array.isArray(json.models) ? json.models.map(m => m.name || m.id).filter(Boolean) : []);

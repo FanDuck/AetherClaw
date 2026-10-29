@@ -11,6 +11,7 @@
 const os = require('os');
 const fs = require('fs');
 const { spawn, exec } = require('child_process');
+const { StringDecoder } = require('string_decoder');
 
 // Dangerous command patterns blocked by default safety guardrails.
 // 命令在匹配前会先做空白归一化，避免用多余空格/制表符绕过。
@@ -200,6 +201,8 @@ class PlatformAdapter {
 
       let stdout = '';
       let stderr = '';
+      const outDec = new StringDecoder('utf8');
+      const errDec = new StringDecoder('utf8');
       let size = 0;
       let timedOut = false;
       let truncated = false;
@@ -211,8 +214,8 @@ class PlatformAdapter {
           truncated = true;
           return;
         }
-        if (which === 'out') stdout += chunk.toString('utf8');
-        else stderr += chunk.toString('utf8');
+        if (which === 'out') stdout += outDec.write(chunk);
+        else stderr += errDec.write(chunk);
       };
       child.stdout.on('data', collect('out'));
       child.stderr.on('data', collect('err'));
@@ -227,6 +230,8 @@ class PlatformAdapter {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
+        stdout += outDec.end();
+        stderr += errDec.end();
         const cleanErr = stderr.trim() || errMsg || '';
         resolve({
           success: code === 0 && !timedOut,

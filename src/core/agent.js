@@ -61,8 +61,10 @@ class AetherClawAgent {
    */
   async run(userPrompt, onStep, options = {}) {
     const onToken = typeof options.onToken === 'function' ? options.onToken : null;
+    const signal = options.signal || null;
     const steps = [];
     const emit = (step) => {
+      if (signal && signal.aborted) return;
       const enriched = { ...step, timestamp: new Date().toISOString() };
       steps.push(enriched);
       if (typeof onStep === 'function') onStep(enriched);
@@ -83,10 +85,14 @@ class AetherClawAgent {
     const isLocalLLM = /(^|\/\/)(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(cfg.baseUrl);
     if (cfg.hasApiKey || isLocalLLM) {
       try {
-        const finalAnswer = await this.runWithLLM(userPrompt, emit, onToken);
+        const finalAnswer = await this.runWithLLM(userPrompt, emit, onToken, signal);
+        if (signal && signal.aborted) return { mode: 'aborted', finalAnswer: '', steps };
         memory.recordEpisode({ userPrompt, finalAnswer, steps });
         return { mode: 'llm', finalAnswer, steps };
       } catch (err) {
+        if (signal && signal.aborted) {
+          return { mode: 'aborted', finalAnswer: '', steps };
+        }
         emit({
           type: 'warning',
           title: '大模型 API 调用异常，自动切换至本地自主执行引擎',
@@ -95,9 +101,14 @@ class AetherClawAgent {
       }
     }
 
+    if (signal && signal.aborted) {
+      return { mode: 'aborted', finalAnswer: '', steps };
+    }
     // Built-in Local Autonomous Engine (Zero-API-Key Sandbox Mode that executes real local tools!)
     const finalAnswer = await this.runLocalAutonomousEngine(userPrompt, emit);
-    memory.recordEpisode({ userPrompt, finalAnswer, steps });
+    if (!(signal && signal.aborted)) {
+      memory.recordEpisode({ userPrompt, finalAnswer, steps });
+    }
     return { mode: 'local_autonomous', finalAnswer, steps };
   }
 
@@ -174,7 +185,7 @@ class AetherClawAgent {
   /**
    * 使用 OpenAI / DeepSeek / Qwen / Ollama 兼容接口执行 ReAct 循环（支持多轮上下文 + 原生 Token 流式输出）
    */
-  async runWithLLM(userPrompt, emit, onToken = null) {
+  async runWithLLM(userPrompt, emit, onToken = null, clientSignal = null) {
     const cfg = config.get();
     const recentHistory = memory.getRecentConversation(6);
     const messages = [
@@ -187,11 +198,19 @@ class AetherClawAgent {
     const useStream = Boolean(onToken);
 
     for (let stepIdx = 1; stepIdx <= maxSteps; stepIdx++) {
+      if (clientSignal && clientSignal.aborted) {
+        throw new Error('Request aborted by client');
+      }
       emit({
         type: 'thought',
         title: `Step ${stepIdx}: 正在请求大模型 (${cfg.model}) 规划行动...`,
         detail: `Endpoint: ${cfg.baseUrl}/chat/completions (${recentHistory.length / 2} 轮历史上下文)`
       });
+
+      const timeoutSig = AbortSignal.timeout(cfg.llmTimeoutMs || 60000);
+      const reqSignal = clientSignal && typeof AbortSignal.any === 'function'
+        ? AbortSignal.any([timeoutSig, clientSignal])
+        : timeoutSig;
 
       let response;
       try {
@@ -209,10 +228,13 @@ class AetherClawAgent {
             temperature: 0.3,
             ...(useStream ? { stream: true } : {})
           }),
-          // 避免上游无响应时请求永久挂起
-          signal: AbortSignal.timeout(cfg.llmTimeoutMs || 60000)
+          // 避免上游无响应时请求永久挂起，同时支持客户端主动取消
+          signal: reqSignal
         });
       } catch (err) {
+        if (clientSignal && clientSignal.aborted) {
+          throw err;
+        }
         const reason = err && (err.name === 'TimeoutError' || err.name === 'AbortError')
           ? `请求超时 (${(cfg.llmTimeoutMs || 60000) / 1000}s)`
           : (err.cause && err.cause.code) || err.message;
