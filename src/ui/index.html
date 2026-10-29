@@ -349,18 +349,41 @@
 
       <!-- Agent Runtime & Security Controls -->
       <div style="margin:12px 0;padding:11px 12px;border-radius:11px;background:rgba(2,6,23,.4);border:1px solid var(--border);">
-        <div style="font-size:12.5px;font-weight:700;color:#e2e8f0;margin-bottom:8px;">🛡️ OpenClaw 执行权限与推理护栏</div>
+        <div style="font-size:12.5px;font-weight:700;color:#e2e8f0;margin-bottom:8px;">🛡️ OpenClaw 执行权限、容器沙箱与推理护栏</div>
         <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;font-size:12.5px;color:var(--text);">
           <label style="display:flex;align-items:center;gap:7px;cursor:pointer;"><input type="checkbox" id="cfgAllowShell" checked /> 允许执行终端命令 (shell_exec)</label>
           <label style="display:flex;align-items:center;gap:7px;cursor:pointer;"><input type="checkbox" id="cfgAllowWrite" checked /> 允许写入本地文件 (file_write)</label>
           <label style="display:flex;align-items:center;gap:7px;cursor:pointer;"><input type="checkbox" id="cfgAutoEvolve" checked /> 允许 AI 自动进化新技能 (SKILL.md)</label>
           <label style="display:flex;align-items:center;gap:7px;">单次最大推理步数: <input type="number" id="cfgMaxSteps" min="1" max="20" value="8" style="width:64px;padding:3px 7px;border-radius:6px;border:1px solid var(--border);background:rgba(30,41,59,.8);color:#fff;" /></label>
         </div>
+        <div style="margin-top:10px;display:flex;align-items:center;gap:10px;font-size:12.5px;">
+          <span style="color:var(--muted);white-space:nowrap;">📦 工具命令沙箱环境:</span>
+          <select id="cfgSandboxMode" style="flex:1;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(30,41,59,.9);color:var(--text);font-size:12.5px;outline:none;">
+            <option value="host">宿主机受控模式 (Host + 危险命令静态/语法拦截护栏)</option>
+            <option value="docker">受限 Docker 容器沙箱 (--cap-drop=ALL --read-only --network=none)</option>
+            <option value="gvisor">gVisor (runsc) 内核级强隔离沙箱 (--runtime=runsc)</option>
+          </select>
+        </div>
       </div>
 
       <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px;">
         <button class="btn" id="cancelSettings">关闭</button>
         <button class="btn btn-primary" id="saveSettings">💾 保存并立即生效</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bearer Token Authentication Modal -->
+  <div class="modal-bg" id="tokenModal">
+    <div class="modal" role="dialog" aria-modal="true" style="width:440px;">
+      <h3 style="margin-bottom:6px;">🔐 Bearer Token 访问鉴权</h3>
+      <p style="font-size:12.5px;color:var(--muted);margin-bottom:12px;">当前服务端已开启 <code>Authorization: Bearer &lt;token&gt;</code> 保护（防止未授权访问）。请输入终端启动日志中打印的 Token：</p>
+      <div class="fg">
+        <label>Access Token (AETHERCLAW_TOKEN)</label>
+        <input id="authTokenInput" type="password" placeholder="粘贴访问令牌..." autocomplete="off" />
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:10px;">
+        <button class="btn btn-primary" id="saveAuthTokenBtn">验证并进入控制台</button>
       </div>
     </div>
   </div>
@@ -394,14 +417,19 @@
     const $$ = (s, r = document) => [...r.querySelectorAll(s)];
     const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    // ---------- Auth token (network-exposed mode) ----------
-    const urlToken = new URLSearchParams(location.search).get('token');
-    if (urlToken) { sessionStorage.setItem('ac_token', urlToken); history.replaceState(null, '', location.pathname); }
-    const TOKEN = sessionStorage.getItem('ac_token') || '';
-    const api = (path, opts = {}) => fetch(path, {
-      ...opts,
-      headers: { 'Content-Type': 'application/json', ...(TOKEN ? { 'x-aetherclaw-token': TOKEN } : {}), ...(opts.headers || {}) }
-    });
+    // ---------- Header Bearer Token (RFC 6750) ----------
+    const getToken = () => sessionStorage.getItem('ac_token') || '';
+    const api = (path, opts = {}) => {
+      const tk = getToken();
+      return fetch(path, {
+        ...opts,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(tk ? { Authorization: `Bearer ${tk}` } : {}),
+          ...(opts.headers || {})
+        }
+      });
+    };
 
     // ---------- Safe text / markdown-lite ----------
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -586,7 +614,12 @@
     async function loadStatus() {
       try {
         const r = await api('/api/status');
-        if (r.status === 401) { toast('需要访问令牌：请使用启动日志中带 ?token= 的链接打开', true); return; }
+        if (r.status === 401) {
+          $('#tokenModal').classList.add('open');
+          toast('🔐 需要 Bearer Token 访问鉴权', true);
+          return;
+        }
+        $('#tokenModal').classList.remove('open');
         state = await r.json(); render();
       } catch (e) { toast('无法连接后端：' + e.message, true); }
     }
@@ -716,6 +749,7 @@
       $('#cfgAllowWrite').checked = c.allowFileWrite !== false;
       $('#cfgAutoEvolve').checked = c.autoEvolveSkills !== false;
       $('#cfgMaxSteps').value = c.maxSteps || 8;
+      $('#cfgSandboxMode').value = c.sandboxMode || 'host';
       $('#connTestResult').style.display = 'none';
       $('#fetchedModelsBox').style.display = 'none';
       renderSettingsVault();
@@ -935,11 +969,19 @@
         allowShellExec: $('#cfgAllowShell').checked,
         allowFileWrite: $('#cfgAllowWrite').checked,
         autoEvolveSkills: $('#cfgAutoEvolve').checked,
+        sandboxMode: $('#cfgSandboxMode').value,
         maxSteps: Number($('#cfgMaxSteps').value) || 8
       };
       const r = await (await api('/api/config', { method: 'POST', body: JSON.stringify(body) })).json();
       if (r.error) return toast(r.error, true);
       state.config = r.config; closeSettings(); render(); toast('✅ 配置已保存并生效');
+    };
+    $('#saveAuthTokenBtn').onclick = () => {
+      const tk = $('#authTokenInput').value.trim();
+      if (!tk) return toast('请输入 Token', true);
+      sessionStorage.setItem('ac_token', tk);
+      $('#authTokenInput').value = '';
+      loadStatus();
     };
     $('#addMemBtn').onclick = async () => {
       const el = $('#newMemInput'); const content = el.value.trim(); if (!content) return; el.value = '';

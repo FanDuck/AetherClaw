@@ -36,18 +36,19 @@ function hostnameOf(hostHeader = '') {
   return hostHeader.split(':')[0];
 }
 
-function securityHeaders(extra = {}) {
+function securityHeaders(extra = {}, hsts = false) {
   return {
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
     'Referrer-Policy': 'no-referrer',
     'Cache-Control': 'no-store',
+    ...(hsts ? { 'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload' } : {}),
     ...extra
   };
 }
 
-function sendJson(res, status, payload) {
-  res.writeHead(status, securityHeaders({ 'Content-Type': 'application/json; charset=utf-8' }));
+function sendJson(res, status, payload, extraHeaders = {}) {
+  res.writeHead(status, securityHeaders({ 'Content-Type': 'application/json; charset=utf-8', ...extraHeaders }));
   res.end(JSON.stringify(payload));
 }
 
@@ -89,6 +90,18 @@ function timingSafeEqual(a, b) {
   return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
 }
 
+/**
+ * 提取请求头中的鉴权令牌：优先使用标准 RFC 6750 `Authorization: Bearer <token>`，
+ * 兼容 `X-AetherClaw-Token` 请求头；禁止通过 URL Query (`?token=`) 传参以防日志/历史记录泄露。
+ */
+function extractAuthToken(req) {
+  const auth = String(req.headers.authorization || '').trim();
+  const m = /^Bearer\s+(.+)$/i.exec(auth);
+  if (m) return m[1].trim();
+  if (req.headers['x-aetherclaw-token']) return String(req.headers['x-aetherclaw-token']).trim();
+  return '';
+}
+
 function safeDecode(segment) {
   try {
     return decodeURIComponent(segment);
@@ -110,10 +123,18 @@ function createServer(opts = {}) {
     const pathname = urlObj.pathname;
 
     try {
-      // 1) Host 校验 (DNS rebinding)
+      // 1) Host 校验 (DNS rebinding) & TLS 反向代理强制 HTTPS 检查
       const cfg = config.get();
       if (isLoopbackHost(cfg.host) && !isLoopbackHost(hostnameOf(req.headers.host))) {
         return sendJson(res, 403, { error: 'Forbidden: invalid Host header' });
+      }
+      if (cfg.behindTlsProxy) {
+        const xfp = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim().toLowerCase();
+        if (xfp && xfp !== 'https') {
+          return sendJson(res, 403, { error: 'Forbidden: HTTPS (TLS) is required by behindTlsProxy policy' }, {
+            'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload'
+          });
+        }
       }
 
       // 2) 跨站请求防护：带 Origin 的请求必须与 Host 同源
@@ -126,11 +147,16 @@ function createServer(opts = {}) {
         }
       }
 
-      // 3) Token 鉴权（API 路径；页面本身不含敏感数据）
+      // 3) Header Bearer Token 鉴权（API 路径；禁止明文 URL ?token= 传参）
       if (pathname.startsWith('/api/') && token) {
-        const supplied = req.headers['x-aetherclaw-token'] || urlObj.searchParams.get('token') || '';
+        const supplied = extractAuthToken(req);
         if (!timingSafeEqual(supplied, token)) {
-          return sendJson(res, 401, { error: 'Unauthorized: missing or invalid token' });
+          return sendJson(
+            res,
+            401,
+            { error: 'Unauthorized: missing or invalid Authorization: Bearer <token> header' },
+            { 'WWW-Authenticate': 'Bearer realm="AetherClaw"' }
+          );
         }
       }
 
@@ -357,10 +383,20 @@ function createServer(opts = {}) {
 
 function startWebServer({ openBrowser = false } = {}) {
   const cfg = config.get();
+  let listenHost = cfg.host;
   let token = process.env.AETHERCLAW_TOKEN || '';
-  const exposed = !isLoopbackHost(cfg.host);
+  const requestedPublic = !isLoopbackHost(listenHost);
+
+  // 默认关闭纯明文公网暴露：若尝试绑定非回环地址 (如 0.0.0.0)，必须显式配置 BEHIND_TLS_PROXY=true 或 ALLOW_INSECURE_HTTP=true
+  let blockedPlaintextPublic = false;
+  if (requestedPublic && !cfg.behindTlsProxy && !cfg.allowInsecureHttp) {
+    listenHost = '127.0.0.1';
+    blockedPlaintextPublic = true;
+  }
+
+  const exposed = !isLoopbackHost(listenHost) || cfg.behindTlsProxy;
   if (exposed && !token) {
-    token = crypto.randomBytes(16).toString('hex');
+    token = crypto.randomBytes(24).toString('hex');
   }
   const server = createServer({ token });
 
@@ -371,21 +407,25 @@ function startWebServer({ openBrowser = false } = {}) {
       }
       reject(err);
     });
-    server.listen(cfg.port, cfg.host, () => {
-      const base = `http://${cfg.host === '0.0.0.0' ? '127.0.0.1' : cfg.host}:${cfg.port}`;
-      const url = token ? `${base}/?token=${token}` : base;
+    server.listen(cfg.port, listenHost, () => {
+      const url = `http://${listenHost === '0.0.0.0' ? '127.0.0.1' : listenHost}:${cfg.port}`;
       const sys = platform.getSystemSummary();
       console.log(`\n============================================================`);
       console.log(`🦅 AetherClaw (灵爪) Autonomous Agent Framework v${pkg.version}`);
-      console.log(`🖥️  OS Runtime : ${sys.osType} (${platform.getDefaultShell()})`);
+      console.log(`🖥️  OS Runtime : ${sys.osType} (${platform.getDefaultShell()}) | Sandbox: ${cfg.sandboxMode || 'host'}`);
       console.log(`🌐 Web Console: ${url}`);
-      if (exposed) {
-        console.log(`🔐 Listening on ${cfg.host} (network-exposed) — token auth is REQUIRED.`);
+      if (blockedPlaintextPublic) {
+        console.log(`🛡️  [安全护栏] 已自动阻止纯明文公网绑定 (${cfg.host}) 并回退至本地回环 (127.0.0.1)。`);
+        console.log(`   👉 生产环境请前置 Nginx (deploy/nginx.conf) 或 Caddy (deploy/Caddyfile) 配置 HTTPS/TLS，`);
+        console.log(`      或设置 BEHIND_TLS_PROXY=true 与 AETHERCLAW_TOKEN 后启动。`);
+      }
+      if (token) {
+        console.log(`🔐 Header Bearer Token 鉴权已启用 (Authorization: Bearer <token>)`);
         console.log(`   Token: ${token}`);
       }
       console.log(`============================================================\n`);
       if (openBrowser) platform.openBrowser(url);
-      resolve({ server, url, token });
+      resolve({ server, url, token, listenHost });
     });
 
     const shutdown = () => {

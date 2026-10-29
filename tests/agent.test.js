@@ -515,3 +515,61 @@ test('23. Edge-case fixes: saveProfile reuses active key & deduplicates, clearAp
   const abortedRes = await agent.run('请对当前系统进行全面健康巡检', null, { signal: ac.signal });
   assert.equal(abortedRes.mode, 'aborted');
 });
+
+test('24. Enterprise hardening: Docker/gVisor sandbox args, Header Bearer Token (no URL ?token= leak), TLS proxy guard, and PM2/systemd/GHCR configs', async () => {
+  // 1) Restricted Docker & gVisor (runsc) sandbox argument builder
+  const dockerSbx = platform.buildSandboxArgs('echo hello', { sandboxMode: 'docker', allowFileWrite: false });
+  assert.ok(dockerSbx.args.includes('--cap-drop=ALL'));
+  assert.ok(dockerSbx.args.includes('--security-opt=no-new-privileges'));
+  assert.ok(dockerSbx.args.includes('--read-only'));
+  assert.ok(dockerSbx.args.includes('--network=none'));
+  assert.ok(dockerSbx.args.some(a => a.endsWith(':/workspace:ro')));
+
+  const gvisorSbx = platform.buildSandboxArgs('uname -a', { sandboxMode: 'gvisor', sandboxMemoryMB: 512 });
+  assert.ok(gvisorSbx.args.includes('--runtime=runsc'));
+  assert.ok(gvisorSbx.args.includes('--memory=512m'));
+
+  // 2) Authorization: Bearer <token> accepted, URL ?token= rejected, behindTlsProxy enforced
+  const server = createServer({ token: 'bearer_secret_2026' });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const { port } = server.address();
+  const host = `127.0.0.1:${port}`;
+  try {
+    // URL query ?token= must be rejected (401) to prevent plaintext token leakage in logs/history
+    const urlLeakTry = await request(port, { path: '/api/status?token=bearer_secret_2026', headers: { Host: host } });
+    assert.equal(urlLeakTry.status, 401);
+    assert.match(urlLeakTry.headers['www-authenticate'] || '', /Bearer/);
+
+    // Standard Authorization: Bearer <token> header succeeds (200)
+    const bearerOk = await request(port, {
+      path: '/api/status',
+      headers: { Host: host, Authorization: 'Bearer bearer_secret_2026' }
+    });
+    assert.equal(bearerOk.status, 200);
+
+    // When behindTlsProxy=true, plaintext X-Forwarded-Proto: http is rejected with 403
+    config.update({ behindTlsProxy: true });
+    const plainHttp = await request(port, {
+      path: '/api/status',
+      headers: { Host: host, Authorization: 'Bearer bearer_secret_2026', 'X-Forwarded-Proto': 'http' }
+    });
+    assert.equal(plainHttp.status, 403);
+
+    const tlsHttps = await request(port, {
+      path: '/api/status',
+      headers: { Host: host, Authorization: 'Bearer bearer_secret_2026', 'X-Forwarded-Proto': 'https' }
+    });
+    assert.equal(tlsHttps.status, 200);
+  } finally {
+    config.update({ behindTlsProxy: false, sandboxMode: 'host' });
+    server.close();
+  }
+
+  // 3) Official deployment files exist and are valid (pm2.config.js, systemd unit, Caddyfile, nginx.conf, GHCR workflow)
+  const pm2Cfg = require('../pm2.config.js');
+  assert.ok(Array.isArray(pm2Cfg.apps) && pm2Cfg.apps[0].name === 'aetherclaw');
+  assert.ok(fs.existsSync(path.join(__dirname, '..', 'deploy', 'aetherclaw.service')));
+  assert.ok(fs.existsSync(path.join(__dirname, '..', 'deploy', 'Caddyfile')));
+  assert.ok(fs.existsSync(path.join(__dirname, '..', 'deploy', 'nginx.conf')));
+  assert.ok(fs.existsSync(path.join(__dirname, '..', '.github', 'workflows', 'docker-publish.yml')));
+});

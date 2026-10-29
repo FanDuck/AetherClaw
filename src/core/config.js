@@ -61,6 +61,12 @@ const DEFAULT_CONFIG = {
   host: process.env.HOST || '127.0.0.1',
   allowShellExec: process.env.ALLOW_SHELL_EXEC !== 'false',
   allowFileWrite: process.env.ALLOW_FILE_WRITE !== 'false',
+  sandboxMode: ['host', 'docker', 'gvisor'].includes(process.env.SANDBOX_MODE) ? process.env.SANDBOX_MODE : 'host',
+  sandboxImage: process.env.SANDBOX_IMAGE || 'alpine:3.20',
+  sandboxMemoryMB: envInt('SANDBOX_MEMORY_MB', 256),
+  sandboxNetwork: process.env.SANDBOX_NETWORK === 'bridge' ? 'bridge' : 'none',
+  behindTlsProxy: process.env.BEHIND_TLS_PROXY === 'true',
+  allowInsecureHttp: process.env.ALLOW_INSECURE_HTTP === 'true',
   shellTimeoutMs: envInt('SHELL_TIMEOUT_MS', 15000),
   llmTimeoutMs: envInt('LLM_TIMEOUT_MS', 60000),
   autoEvolveSkills: process.env.AUTO_EVOLVE_SKILLS !== 'false',
@@ -198,6 +204,16 @@ class ConfigManager {
     if (typeof partial.allowShellExec === 'boolean') next.allowShellExec = partial.allowShellExec;
     if (typeof partial.allowFileWrite === 'boolean') next.allowFileWrite = partial.allowFileWrite;
     if (typeof partial.autoEvolveSkills === 'boolean') next.autoEvolveSkills = partial.autoEvolveSkills;
+    if (typeof partial.sandboxMode === 'string' && ['host', 'docker', 'gvisor'].includes(partial.sandboxMode)) {
+      next.sandboxMode = partial.sandboxMode;
+    }
+    if (typeof partial.sandboxImage === 'string' && /^[a-zA-Z0-9._/:@-]{2,120}$/.test(partial.sandboxImage.trim())) {
+      next.sandboxImage = partial.sandboxImage.trim();
+    }
+    if (typeof partial.sandboxNetwork === 'string' && ['none', 'bridge'].includes(partial.sandboxNetwork)) {
+      next.sandboxNetwork = partial.sandboxNetwork;
+    }
+    if (typeof partial.behindTlsProxy === 'boolean') next.behindTlsProxy = partial.behindTlsProxy;
     if (typeof partial.maxSteps === 'number' && Number.isFinite(partial.maxSteps)) {
       next.maxSteps = Math.max(1, Math.min(20, Math.round(partial.maxSteps)));
     }

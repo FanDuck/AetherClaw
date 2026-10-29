@@ -10,7 +10,7 @@
 *An OpenClaw & Hermes-Inspired Cross-Platform (Windows & Linux) Self-Evolving Autonomous AI Agent Framework*
 
 [![CI Status](https://github.com/FanDuck/AetherClaw/actions/workflows/ci.yml/badge.svg)](https://github.com/FanDuck/AetherClaw/actions)
-[![Release Version](https://img.shields.io/badge/Release-v1.4.0-0284c7.svg)](https://github.com/FanDuck/AetherClaw/releases)
+[![Release Version](https://img.shields.io/badge/Release-v1.5.0-0284c7.svg)](https://github.com/FanDuck/AetherClaw/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/OS-Windows%20%7C%20Linux-a855f7.svg)](#)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18.0-339933.svg)](https://nodejs.org/)
@@ -206,14 +206,24 @@ node src/index.js --run "请对当前系统进行全面健康巡检"
 npm test
 ```
 
-#### 🐳 方式 C：Docker 容器化一键部署（适合 Linux 云服务器 / 群晖 / 飞牛 NAS）
+#### 🐳 方式 C：GHCR 预构建 Docker 镜像单命令拉起 & 一键升级（云服务器 / 群晖 / 飞牛 NAS）
 ```bash
-# 一键后台启动并持久化挂载 ./data 与 ./skills 目录
-docker compose up -d
+# 1. 单命令直接拉起官方预构建多架构镜像 (linux/amd64 & arm64)，默认最小权限只读根文件系统
+docker run -d --name aetherclaw -p 127.0.0.1:3721:3721 \
+  --cap-drop=ALL --security-opt=no-new-privileges --read-only \
+  --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+  -v $(pwd)/data:/app/data -v $(pwd)/skills:/app/skills \
+  ghcr.io/fanduck/aetherclaw:latest
 
-# 查看启动日志与自动生成的访问令牌链接
-docker compose logs -f
+# 2. 或使用 docker-compose 一键启动 / 一键热升级至最新版
+docker compose up -d
+docker compose pull && docker compose up -d
 ```
+
+#### 🛡️ 方式 D：生产级进程守护 (`systemd` / `PM2`)、TLS 反向代理与容器沙箱
+- **受限容器 / gVisor 工具沙箱**：在 Web 控制台「⚙️ API 与安全设置」或 `.env` 中设置 `SANDBOX_MODE=docker`（`--cap-drop=ALL --read-only --network=none`）或 `SANDBOX_MODE=gvisor`（`--runtime=runsc` 内核级隔离）。
+- **关闭明文公网暴露 + 前置 HTTPS/TLS**：提供开箱即用的 [`deploy/Caddyfile`](deploy/Caddyfile) 与 [`deploy/nginx.conf`](deploy/nginx.conf)，配合 `BEHIND_TLS_PROXY=true` 与 `Authorization: Bearer <token>` 请求头鉴权。
+- **官方常驻守护配置**：提供 Linux [`deploy/aetherclaw.service`](deploy/aetherclaw.service) (`systemd`) 与跨平台 [`pm2.config.js`](pm2.config.js) (`pm2 start pm2.config.js`)，以及一键升级脚本 [`upgrade.sh`](upgrade.sh) / [`upgrade.bat`](upgrade.bat)。
 
 ---
 

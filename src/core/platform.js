@@ -155,14 +155,60 @@ class PlatformAdapter {
   }
 
   /**
-   * 跨平台执行终端命令。
-   * 返回 { success, exitCode, stdout, stderr, timedOut, durationMs, platform }
+   * 构造受限 Docker / gVisor (runsc) 沙箱容器参数：
+   *  - 丢弃全部 Linux Capabilities (--cap-drop=ALL)
+   *  - 禁止提权 (--security-opt=no-new-privileges)
+   *  - 根文件系统只读 (--read-only) + 内存临时目录 (--tmpfs /tmp)
+   *  - 默认断网隔离 (--network=none) + 内存/CPU/进程数硬限制 (--pids-limit=64)
+   *  - 非特权 nobody 用户 (65534:65534) 运行
+   *  - 若 sandboxMode === 'gvisor'，启用 Google gVisor 内核级隔离 (--runtime=runsc)
+   */
+  buildSandboxArgs(command, options = {}) {
+    const mode = options.sandboxMode === 'gvisor' ? 'gvisor' : 'docker';
+    const image = options.sandboxImage || 'alpine:3.20';
+    const memMB = Math.max(64, Math.min(4096, Number(options.sandboxMemoryMB) || 256));
+    const net = options.sandboxNetwork === 'bridge' ? 'bridge' : 'none';
+    const cwd = options.cwd || process.cwd();
+    const mountMode = options.allowFileWrite === false ? 'ro' : 'rw';
+    const containerName = `ac-sbx-${process.pid}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+
+    const args = [
+      'run',
+      '--rm',
+      '--name', containerName,
+      ...(mode === 'gvisor' ? ['--runtime=runsc'] : []),
+      `--network=${net}`,
+      '--read-only',
+      '--tmpfs', '/tmp:rw,noexec,nosuid,size=64m',
+      '--cap-drop=ALL',
+      '--security-opt=no-new-privileges',
+      `--memory=${memMB}m`,
+      `--memory-swap=${memMB}m`,
+      '--cpus=1',
+      '--pids-limit=64',
+      '--user', '65534:65534',
+      '-v', `${cwd}:/workspace:${mountMode}`,
+      '-w', '/workspace',
+      image,
+      'sh', '-c', command
+    ];
+    return { containerName, args, mode, image };
+  }
+
+  /**
+   * 跨平台执行终端命令（支持宿主机受控模式 + Docker 受限容器沙箱 + gVisor 内核沙箱）。
+   * 返回 { success, exitCode, stdout, stderr, timedOut, durationMs, platform, sandboxMode }
    */
   executeCommand(command, options = {}) {
     const timeoutMs = options.timeoutMs || 15000;
     const cwd = options.cwd || process.cwd();
+    const sandboxMode = ['docker', 'gvisor'].includes(options.sandboxMode) ? options.sandboxMode : 'host';
     const started = Date.now();
-    const label = this.isWindows ? 'Windows (PowerShell)' : 'Linux (Bash)';
+    const label = sandboxMode === 'gvisor'
+      ? 'Sandbox (gVisor runsc)'
+      : (sandboxMode === 'docker'
+          ? 'Sandbox (Docker Restricted)'
+          : (this.isWindows ? 'Windows (PowerShell)' : 'Linux (Bash)'));
 
     const safety = this.checkSafety(command);
     if (!safety.safe) {
@@ -174,14 +220,19 @@ class PlatformAdapter {
         blocked: true,
         timedOut: false,
         durationMs: 0,
-        platform: label
+        platform: label,
+        sandboxMode
       });
     }
 
     return new Promise((resolve) => {
       let child;
+      let sandboxInfo = null;
       try {
-        if (this.isWindows) {
+        if (sandboxMode === 'docker' || sandboxMode === 'gvisor') {
+          sandboxInfo = this.buildSandboxArgs(command, { ...options, cwd, sandboxMode });
+          child = spawn('docker', sandboxInfo.args, { cwd, windowsHide: true });
+        } else if (this.isWindows) {
           const script = `[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $OutputEncoding=[System.Text.Encoding]::UTF8; ${command}`;
           const encoded = Buffer.from(script, 'utf16le').toString('base64');
           child = spawn(
@@ -195,7 +246,7 @@ class PlatformAdapter {
       } catch (err) {
         return resolve({
           success: false, exitCode: -1, stdout: '', stderr: err.message,
-          timedOut: false, durationMs: Date.now() - started, platform: label
+          timedOut: false, durationMs: Date.now() - started, platform: label, sandboxMode
         });
       }
 
@@ -222,6 +273,9 @@ class PlatformAdapter {
 
       const timer = setTimeout(() => {
         timedOut = true;
+        if (sandboxInfo && sandboxInfo.containerName) {
+          exec(`docker kill ${sandboxInfo.containerName}`, () => {});
+        }
         this._killTree(child);
         setTimeout(() => finish(-1, 'Process terminated after timeout'), 300).unref();
       }, timeoutMs);
@@ -240,7 +294,8 @@ class PlatformAdapter {
           stderr: timedOut ? `${cleanErr}\n[Timeout] Command exceeded ${timeoutMs}ms and was terminated.`.trim() : cleanErr,
           timedOut,
           durationMs: Date.now() - started,
-          platform: label
+          platform: label,
+          sandboxMode
         });
       };
 

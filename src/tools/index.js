@@ -66,7 +66,12 @@ const TOOLS = {
       }
       return await platform.executeCommand(command, {
         cwd: workDir,
-        timeoutMs: cfg.shellTimeoutMs || 15000
+        timeoutMs: cfg.shellTimeoutMs || 15000,
+        sandboxMode: cfg.sandboxMode || 'host',
+        sandboxImage: cfg.sandboxImage || 'alpine:3.20',
+        sandboxMemoryMB: cfg.sandboxMemoryMB || 256,
+        sandboxNetwork: cfg.sandboxNetwork || 'none',
+        allowFileWrite: cfg.allowFileWrite !== false
       });
     }
   },

@@ -1,0 +1,44 @@
+# ============================================================================
+# AetherClaw (灵爪) - Official Linux systemd Service Unit
+# ============================================================================
+# 安装与启动步骤 (Ubuntu / Debian / CentOS / Rocky / Arch):
+#   1. 将项目部署至 /opt/aetherclaw 并配置 /opt/aetherclaw/.env
+#   2. sudo cp deploy/aetherclaw.service /etc/systemd/system/aetherclaw.service
+#   3. sudo systemctl daemon-reload
+#   4. sudo systemctl enable --now aetherclaw
+#   5. 查看日志: sudo journalctl -u aetherclaw -f
+# ============================================================================
+
+[Unit]
+Description=AetherClaw (灵爪) Self-Evolving Autonomous AI Agent Service
+Documentation=https://github.com/FanDuck/AetherClaw
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/aetherclaw
+EnvironmentFile=-/opt/aetherclaw/.env
+Environment="NODE_ENV=production"
+Environment="HOST=127.0.0.1"
+Environment="PORT=3721"
+ExecStart=/usr/bin/env node /opt/aetherclaw/src/index.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+
+# ---- systemd 内核级安全加固护栏 ----
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/opt/aetherclaw/data /opt/aetherclaw/skills
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

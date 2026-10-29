@@ -1,13 +1,28 @@
+# ============================================================================
+# AetherClaw (灵爪) - Production Docker Compose (Pre-built GHCR Image + Security Hardening)
+# ============================================================================
+# 单命令直接拉起预构建镜像：
+#   docker compose up -d
+# 一键升级至最新版：
+#   docker compose pull && docker compose up -d
+# ============================================================================
+
 services:
   aetherclaw:
-    build: .
+    image: ghcr.io/fanduck/aetherclaw:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: aetherclaw
     restart: unless-stopped
+    # 默认仅绑定宿主机回环地址 127.0.0.1，避免纯明文公网暴露；公网访问请前置 deploy/Caddyfile 或 deploy/nginx.conf
     ports:
-      - "${PORT:-3721}:3721"
+      - "${BIND_IP:-127.0.0.1}:${PORT:-3721}:3721"
     environment:
       - HOST=0.0.0.0
       - PORT=3721
+      - ALLOW_INSECURE_HTTP=true
+      - BEHIND_TLS_PROXY=${BEHIND_TLS_PROXY:-false}
       - AETHERCLAW_TOKEN=${AETHERCLAW_TOKEN:-}
       - LLM_BASE_URL=${LLM_BASE_URL:-https://api.deepseek.com/v1}
       - LLM_API_KEY=${LLM_API_KEY:-}
@@ -15,6 +30,20 @@ services:
       - ALLOW_SHELL_EXEC=${ALLOW_SHELL_EXEC:-true}
       - ALLOW_FILE_WRITE=${ALLOW_FILE_WRITE:-true}
       - AUTO_EVOLVE_SKILLS=${AUTO_EVOLVE_SKILLS:-true}
+      - SANDBOX_MODE=${SANDBOX_MODE:-host}
     volumes:
       - ./data:/app/data
       - ./skills:/app/skills
+    # ---- 容器最小权限与只读根文件系统加固 ----
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M

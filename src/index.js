@@ -16,11 +16,13 @@ Usage:
   aetherclaw --open           Start the Web Console and open it in your browser
   aetherclaw --cli            Start the interactive terminal CLI
   aetherclaw --run "<task>"   Run a single task and print the result
+  aetherclaw --upgrade        One-click self-upgrade (git pull / docker compose pull)
   aetherclaw --version        Print version
   aetherclaw --help           Show this help
 
 Environment (or put them in a .env file, see .env.example):
-  PORT, HOST, LLM_BASE_URL, LLM_API_KEY, LLM_MODEL, AETHERCLAW_TOKEN, AETHERCLAW_HOME
+  PORT, HOST, LLM_BASE_URL, LLM_API_KEY, LLM_MODEL, AETHERCLAW_TOKEN, AETHERCLAW_HOME,
+  SANDBOX_MODE (host|docker|gvisor), BEHIND_TLS_PROXY (true|false)
 `;
 
 async function main(argv = process.argv.slice(2)) {
@@ -32,6 +34,19 @@ async function main(argv = process.argv.slice(2)) {
   }
   if (args.includes('--version') || args.includes('-v')) {
     console.log(pkg.version);
+    return;
+  }
+  if (args.includes('--upgrade')) {
+    const { execSync } = require('child_process');
+    console.log('🔄 正在检查并升级 AetherClaw (灵爪)...');
+    try {
+      const out = execSync('git pull --ff-only', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+      console.log(out.trim() || '✅ 已是最新版本！');
+      console.log('💡 若使用 Docker 部署，可执行: docker compose pull && docker compose up -d');
+    } catch (err) {
+      console.error('⚠️ 自动 git pull 未成功，你可以通过以下命令一键升级：\n  • Git 部署: git pull --ff-only\n  • Docker 镜像: docker compose pull && docker compose up -d');
+      process.exitCode = 1;
+    }
     return;
   }
 

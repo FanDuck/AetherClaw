@@ -2,6 +2,20 @@
 
 本项目遵循 [语义化版本 2.0.0 (Semantic Versioning)](https://semver.org/lang/zh-CN/) 规范。
 
+## [v1.5.0] - 2026-10-29
+
+### 🛡️ 生产级容器沙箱、Bearer Token 鉴权、TLS 反向代理与多架构 GHCR 预构建镜像
+- **受限 Docker 容器与 Google gVisor (`runsc`) 工具沙箱 (`SANDBOX_MODE`)**：
+  - `shell_exec` 与 Web 控制台设置新增三种隔离级别切换：`host`（宿主机护栏模式）、`docker`（受限容器沙箱：`--cap-drop=ALL --security-opt=no-new-privileges --read-only --network=none --pids-limit=64 --user 65534:65534`）以及 `gvisor`（Google gVisor `--runtime=runsc` 内核级沙箱）。
+- **RFC 6750 标准 `Authorization: Bearer <token>` 鉴权 & 默认关闭纯明文公网暴露**：
+  - 全面支持 `Authorization: Bearer <token>` 请求头鉴权（弹窗式密钥输入），**彻底禁止通过 URL `?token=` 明文参数传递令牌**，杜绝浏览器历史记录与代理日志泄露。
+  - 默认拦截未配置 TLS 的 `0.0.0.0` 纯明文公网绑定并自动回退至 `127.0.0.1`；官方提供 [`deploy/Caddyfile`](deploy/Caddyfile) 与 [`deploy/nginx.conf`](deploy/nginx.conf) 配置模板，支持 `BEHIND_TLS_PROXY=true` 强制 HTTPS 校验与 HSTS 响应头。
+- **官方 `systemd` 服务单元文件与 `pm2.config.js`**：
+  - 新增 [`deploy/aetherclaw.service`](deploy/aetherclaw.service)（含 `NoNewPrivileges=true`、`ProtectSystem=strict` 等 systemd 内核级加固）与 [`pm2.config.js`](pm2.config.js) 进程守护配置。
+- **GHCR 多架构预构建 Docker 镜像自动发布与一键升级**：
+  - 新增 [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml)，自动构建并发布 `linux/amd64` 与 `linux/arm64` 预构建镜像至 `ghcr.io/fanduck/aetherclaw:latest`。
+  - 新增 `aetherclaw --upgrade`、[`upgrade.sh`](upgrade.sh) 与 [`upgrade.bat`](upgrade.bat)，支持单命令拉起（`docker compose up -d`）与一键升级（`docker compose pull && docker compose up -d`）。
+
 ## [v1.4.0] - 2026-10-29
 
 ### 🔑 大模型 API 多密钥管理中心与连通性诊断 (API Key Vault & Live Diagnostics)

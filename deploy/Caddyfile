@@ -1,0 +1,28 @@
+# ============================================================================
+# AetherClaw (灵爪) - Official Caddy TLS Reverse Proxy Configuration
+# ============================================================================
+# 生产环境最佳实践：
+#   1. AetherClaw 仅监听本机回环 HOST=127.0.0.1，并开启 BEHIND_TLS_PROXY=true 与 AETHERCLAW_TOKEN
+#   2. Caddy 自动申请并续期 Let's Encrypt HTTPS 证书，关闭纯明文公网暴露
+#   3. 使用方法：将 agent.example.com 替换为你的域名，执行 `caddy run --config deploy/Caddyfile`
+# ============================================================================
+
+agent.example.com {
+    encode zstd gzip
+
+    header {
+        Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer"
+        -Server
+    }
+
+    reverse_proxy 127.0.0.1:3721 {
+        # 禁用缓冲以保证 /api/chat/stream 的 SSE 实时逐字流式推送
+        flush_interval -1
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+}
