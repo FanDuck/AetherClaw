@@ -10,7 +10,7 @@
 *An OpenClaw & Hermes-Inspired Cross-Platform (Windows & Linux) Self-Evolving Autonomous AI Agent Framework*
 
 [![CI Status](https://github.com/FanDuck/AetherClaw/actions/workflows/ci.yml/badge.svg)](https://github.com/FanDuck/AetherClaw/actions)
-[![Release Version](https://img.shields.io/badge/Release-v1.0.0-0284c7.svg)](https://github.com/FanDuck/AetherClaw/releases)
+[![Release Version](https://img.shields.io/badge/Release-v1.1.0-0284c7.svg)](https://github.com/FanDuck/AetherClaw/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/OS-Windows%20%7C%20Linux-a855f7.svg)](#)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18.0-339933.svg)](https://nodejs.org/)
@@ -71,7 +71,8 @@
    - 内置高危指令黑名单拦截（自动阻断 `rm -rf /`、`mkfs`、`Format-Volume`、Fork 炸弹等破坏性命令）。
    - 命令执行默认 15 秒超时熔断，杜绝进程卡死。
    - API 密钥仅保存在本地 `data/config.local.json`，已被 `.gitignore` 严格隔离，上传代码绝不泄密。
-5. ⚡ **零第三方重度依赖 (Zero-Bloat Architecture)**
+5. ✨ **动态可视化控制台**：粒子网络背景、实时 CPU/内存仪表盘、SSE 流式步骤时间线、打字机输出，并尊重系统"减少动态效果"设置。
+6. ⚡ **零第三方重度依赖 (Zero-Bloat Architecture)**
    - 完全基于 Node.js 原生底层模块开发，无需安装编译数十个 C++ 扩展包，拉取仓库即可毫秒级启动。
 
 ---
@@ -282,6 +283,8 @@ created_at: 2026-10-29T00:00:00.000Z
 | 请求方法 & 路径 | 功能说明 | 请求体示例 (`JSON`) |
 | :--- | :--- | :--- |
 | `GET /api/status` | 获取系统环境、脱敏配置、记忆列表、技能列表与工具清单 | 无 |
+| `POST /api/chat/stream` | **SSE 实时流式**推送每一步思考/工具/观察，结束时推送 `done` 事件 | `{"prompt": "..."}` |
+| `GET /api/metrics` | 实时 CPU / 内存使用率 | 无 |
 | `POST /api/chat` | 向 Agent 发送指令并获取完整思考步骤 (`steps`) 与最终回复 (`finalAnswer`) | `{"prompt": "请对当前系统进行全面健康巡检"}` |
 | `POST /api/config` | 动态更新大模型 `baseUrl`、`model`、`apiKey` 等配置 | `{"baseUrl": "https://api.deepseek.com/v1", "model": "deepseek-chat", "apiKey": "sk-..."}` |
 | `POST /api/memory` | 手动写入一条长期语义记忆 | `{"content": "生产环境日志位于 /var/log/app", "category": "ops"}` |

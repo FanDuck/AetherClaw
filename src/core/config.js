@@ -1,4 +1,4 @@
-/**
+﻿/**
  * AetherClaw (灵爪) - Zero-Code Configuration Manager
  * 支持通过可视化 Web 界面、本地 JSON 或环境变量管理大模型 API 与 Agent 参数。
  */
@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const DATA_DIR = path.join(process.cwd(), 'data');
+const { DATA_DIR, ensureDir, atomicWrite } = require('./paths');
 const LOCAL_CONFIG_PATH = path.join(DATA_DIR, 'config.local.json');
 
 const DEFAULT_CONFIG = {
@@ -30,9 +30,7 @@ class ConfigManager {
   }
 
   ensureDataDir() {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
+    ensureDir(DATA_DIR);
   }
 
   load() {
@@ -57,8 +55,10 @@ class ConfigManager {
   getSafeConfig() {
     const cfg = this.get();
     const hasKey = Boolean(cfg.apiKey && cfg.apiKey.trim().length > 0 && cfg.apiKey !== 'your_api_key_here');
+    // 绝不把明文密钥下发给前端 / API 调用方
+    const { apiKey, ...rest } = cfg;
     return {
-      ...cfg,
+      ...rest,
       hasApiKey: hasKey,
       apiKeyMasked: hasKey
         ? `${cfg.apiKey.slice(0, 4)}...${cfg.apiKey.slice(-4)}`
@@ -83,7 +83,7 @@ class ConfigManager {
     if (typeof partial.maxSteps === 'number') next.maxSteps = Math.max(1, Math.min(20, partial.maxSteps));
 
     this.config = next;
-    fs.writeFileSync(LOCAL_CONFIG_PATH, JSON.stringify(this.config, null, 2), 'utf8');
+    atomicWrite(LOCAL_CONFIG_PATH, JSON.stringify(this.config, null, 2));
     return this.getSafeConfig();
   }
 }

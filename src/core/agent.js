@@ -1,4 +1,4 @@
-/**
+﻿/**
  * AetherClaw (灵爪) - Autonomous ReAct & Self-Evolving Agent Core
  * 结合 OpenClaw 的跨平台工具执行能力与 Hermes 的记忆检索/技能自动进化闭环。
  * 支持：
@@ -10,6 +10,13 @@ const platform = require('./platform');
 const config = require('./config');
 const memory = require('./memory');
 const { getToolSpecsForLLM, runTool } = require('../tools');
+
+/** 工具结果回灌给模型前做长度裁剪，避免上下文被超长输出撑爆。 */
+function clipForModel(result, limit = 8000) {
+  let s = JSON.stringify(result);
+  if (s.length > limit) s = s.slice(0, limit) + '...[truncated]';
+  return s;
+}
 
 class AetherClawAgent {
   /**
@@ -181,7 +188,7 @@ class AetherClawAgent {
           role: 'tool',
           tool_call_id: toolCall.id,
           name: fnName,
-          content: JSON.stringify(result)
+          content: clipForModel(result)
         });
       }
     }

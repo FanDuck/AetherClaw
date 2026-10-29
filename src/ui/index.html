@@ -3,632 +3,561 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
   <title>AetherClaw (灵爪) — Cross-Platform Self-Evolving Agent Console</title>
   <style>
     :root {
-      --bg-main: #0b0f19;
-      --bg-panel: #111827;
-      --bg-card: #1f2937;
-      --border: #374151;
-      --text-main: #f3f4f6;
-      --text-muted: #9ca3af;
+      --bg: #070b14;
+      --panel: rgba(15, 23, 42, 0.72);
+      --card: rgba(30, 41, 59, 0.72);
+      --border: rgba(148, 163, 184, 0.18);
+      --text: #f1f5f9;
+      --muted: #94a3b8;
       --accent: #38bdf8;
-      --accent-purple: #a855f7;
-      --success: #22c55e;
-      --warning: #f59e0b;
-      --danger: #ef4444;
+      --violet: #a78bfa;
+      --green: #4ade80;
+      --amber: #fbbf24;
+      --red: #f87171;
+      --grad: linear-gradient(135deg, #0ea5e9, #6366f1 55%, #a855f7);
+      --ease: cubic-bezier(.22, 1, .36, 1);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Microsoft YaHei", sans-serif;
-      background: var(--bg-main);
-      color: var(--text-main);
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      display: flex; flex-direction: column; overflow: hidden;
     }
-    /* Top Header */
+    #bgCanvas { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+    .aurora {
+      position: fixed; inset: -20%; z-index: 0; pointer-events: none; filter: blur(80px); opacity: .55;
+      background:
+        radial-gradient(40% 35% at 15% 20%, rgba(14,165,233,.28), transparent 70%),
+        radial-gradient(35% 40% at 85% 75%, rgba(168,85,247,.26), transparent 70%),
+        radial-gradient(30% 30% at 60% 15%, rgba(99,102,241,.18), transparent 70%);
+      animation: drift 22s ease-in-out infinite alternate;
+    }
+    @keyframes drift { to { transform: translate3d(3%, -2%, 0) scale(1.08) rotate(2deg); } }
+
+    header, .workspace { position: relative; z-index: 1; }
     header {
-      height: 62px;
-      background: rgba(17, 24, 39, 0.92);
+      height: 64px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between;
+      padding: 0 20px; background: var(--panel); backdrop-filter: blur(14px);
       border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 20px;
-      flex-shrink: 0;
     }
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 12px;
+    header::after {
+      content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent), var(--violet), transparent);
+      background-size: 200% 100%; animation: sweep 5s linear infinite; opacity: .8;
     }
-    .brand-logo {
-      width: 36px;
-      height: 36px;
-      border-radius: 10px;
-      background: linear-gradient(135deg, var(--accent), var(--accent-purple));
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 20px;
-      box-shadow: 0 0 15px rgba(56, 189, 248, 0.35);
+    @keyframes sweep { to { background-position: -200% 0; } }
+
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .logo {
+      width: 38px; height: 38px; border-radius: 11px; background: var(--grad);
+      display: grid; place-items: center; font-size: 20px; position: relative;
+      box-shadow: 0 0 22px rgba(99,102,241,.55); animation: float 4s ease-in-out infinite;
     }
-    .brand-title {
-      font-weight: 700;
-      font-size: 18px;
-      letter-spacing: 0.3px;
+    .logo::after {
+      content: ""; position: absolute; inset: -4px; border-radius: 14px; border: 1px solid rgba(56,189,248,.5);
+      animation: pulse-ring 2.4s ease-out infinite;
     }
-    .brand-sub {
-      font-size: 12px;
-      color: var(--text-muted);
+    @keyframes float { 50% { transform: translateY(-3px); } }
+    @keyframes pulse-ring { from { transform: scale(.92); opacity: .9; } to { transform: scale(1.25); opacity: 0; } }
+    .brand-title { font-weight: 800; font-size: 18px; letter-spacing: .3px; }
+    .brand-title span {
+      background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent;
     }
-    .header-right {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
+    .brand-sub { font-size: 11.5px; color: var(--muted); }
+
+    .header-right { display: flex; align-items: center; gap: 12px; }
     .badge {
-      padding: 5px 11px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 600;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      gap: 6px;
+      padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 600;
+      background: var(--card); border: 1px solid var(--border);
+      display: flex; align-items: center; gap: 7px; white-space: nowrap;
     }
-    .dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--success);
-    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 0 rgba(74,222,128,.7); animation: ping 1.8s infinite; }
+    .dot.off { background: var(--red); animation: none; }
+    @keyframes ping { 70% { box-shadow: 0 0 0 8px rgba(74,222,128,0); } 100% { box-shadow: 0 0 0 0 rgba(74,222,128,0); } }
+
+    .gauges { display: flex; gap: 10px; }
+    .gauge { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--muted); }
+    .gauge svg { width: 34px; height: 34px; transform: rotate(-90deg); }
+    .gauge circle { fill: none; stroke-width: 4; }
+    .gauge .track { stroke: rgba(148,163,184,.18); }
+    .gauge .val { stroke: var(--accent); stroke-linecap: round; stroke-dasharray: 94.25; stroke-dashoffset: 94.25; transition: stroke-dashoffset .9s var(--ease), stroke .4s; }
+    .gauge b { display: block; color: var(--text); font-size: 12px; font-variant-numeric: tabular-nums; }
+
     .btn {
-      padding: 7px 14px;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      background: var(--bg-card);
-      color: var(--text-main);
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.15s;
+      position: relative; overflow: hidden; padding: 8px 15px; border-radius: 9px;
+      border: 1px solid var(--border); background: var(--card); color: var(--text);
+      font-size: 13px; font-weight: 600; cursor: pointer;
+      transition: transform .18s var(--ease), border-color .18s, box-shadow .18s, background .18s;
     }
-    .btn:hover { border-color: var(--accent); color: var(--accent); }
-    .btn-primary {
-      background: linear-gradient(135deg, #0284c7, #7c3aed);
-      border: none;
-      color: #fff;
-    }
-    .btn-primary:hover { opacity: 0.92; color: #fff; }
+    .btn:hover { border-color: var(--accent); transform: translateY(-1px); }
+    .btn:active { transform: translateY(0) scale(.98); }
+    .btn:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+    .btn-primary { background: var(--grad); border: none; box-shadow: 0 6px 20px rgba(99,102,241,.35); }
+    .btn-primary:hover { box-shadow: 0 8px 28px rgba(99,102,241,.55); }
+    .btn-sm { padding: 4px 10px; font-size: 12px; }
+    .ripple { position: absolute; border-radius: 50%; background: rgba(255,255,255,.35); transform: scale(0); animation: ripple .6s linear; pointer-events: none; }
+    @keyframes ripple { to { transform: scale(4); opacity: 0; } }
 
-    /* Main Workspace Layout */
-    .workspace {
-      flex: 1;
-      display: grid;
-      grid-template-columns: 1fr 410px;
-      overflow: hidden;
+    .workspace { flex: 1; display: grid; grid-template-columns: 1fr 410px; min-height: 0; }
+    .chat-col { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--border); }
+    .quick-bar { padding: 10px 18px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border-bottom: 1px solid var(--border); background: rgba(15,23,42,.45); }
+    .chip {
+      padding: 5px 11px; border-radius: 7px; font-size: 12px; cursor: pointer; color: var(--accent);
+      background: rgba(56,189,248,.08); border: 1px solid rgba(56,189,248,.28);
+      transition: all .18s var(--ease);
     }
+    .chip:hover { background: rgba(56,189,248,.2); transform: translateY(-1px); box-shadow: 0 4px 14px rgba(56,189,248,.18); }
 
-    /* Left Chat & Execution Console */
-    .chat-column {
-      display: flex;
-      flex-direction: column;
-      border-right: 1px solid var(--border);
-      overflow: hidden;
+    .messages { flex: 1; overflow-y: auto; padding: 22px; display: flex; flex-direction: column; gap: 16px; scroll-behavior: smooth; }
+    .messages::-webkit-scrollbar, .tab-content::-webkit-scrollbar { width: 8px; }
+    .messages::-webkit-scrollbar-thumb, .tab-content::-webkit-scrollbar-thumb { background: rgba(148,163,184,.25); border-radius: 8px; }
+
+    .msg { max-width: 90%; padding: 14px 16px; border-radius: 14px; line-height: 1.65; font-size: 14px; animation: rise .45s var(--ease) both; }
+    @keyframes rise { from { opacity: 0; transform: translateY(14px) scale(.98); } to { opacity: 1; transform: none; } }
+    .msg-user { align-self: flex-end; background: var(--grad); color: #fff; box-shadow: 0 8px 24px rgba(99,102,241,.3); border-bottom-right-radius: 4px; }
+    .msg-agent { align-self: flex-start; width: 90%; background: var(--panel); border: 1px solid var(--border); backdrop-filter: blur(10px); border-bottom-left-radius: 4px; }
+
+    .steps { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+    .step {
+      border-left: 3px solid var(--accent); background: rgba(30,41,59,.7);
+      padding: 8px 12px; border-radius: 8px; font-size: 12.5px; animation: slide-in .4s var(--ease) both;
     }
-    .quick-bar {
-      padding: 10px 18px;
-      background: rgba(17, 24, 39, 0.6);
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-    .quick-chip {
-      padding: 5px 11px;
-      border-radius: 6px;
-      font-size: 12px;
-      background: rgba(56, 189, 248, 0.1);
-      border: 1px solid rgba(56, 189, 248, 0.3);
-      color: var(--accent);
-      cursor: pointer;
-      transition: 0.15s;
-    }
-    .quick-chip:hover {
-      background: rgba(56, 189, 248, 0.22);
-    }
-    .messages {
-      flex: 1;
-      overflow-y: auto;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-    .msg {
-      max-width: 88%;
-      padding: 14px 16px;
-      border-radius: 12px;
-      line-height: 1.6;
-      font-size: 14px;
-    }
-    .msg-user {
-      align-self: flex-end;
-      background: linear-gradient(135deg, #0369a1, #4f46e5);
-      color: #fff;
-    }
-    .msg-agent {
-      align-self: flex-start;
-      background: var(--bg-panel);
-      border: 1px solid var(--border);
-      width: 88%;
-    }
-    .step-list {
-      margin-bottom: 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .step-item {
-      background: rgba(31, 41, 55, 0.75);
-      border-left: 3px solid var(--accent);
-      padding: 8px 12px;
-      border-radius: 6px;
-      font-size: 12.5px;
-    }
-    .step-item.tool_call { border-left-color: var(--accent-purple); }
-    .step-item.observation { border-left-color: var(--success); }
-    .step-item.warning { border-left-color: var(--warning); }
-    .step-title { font-weight: 600; color: #e5e7eb; margin-bottom: 3px; }
+    @keyframes slide-in { from { opacity: 0; transform: translateX(-18px); } to { opacity: 1; transform: none; } }
+    .step.tool_call { border-left-color: var(--violet); }
+    .step.observation { border-left-color: var(--green); }
+    .step.skill_match { border-left-color: var(--amber); }
+    .step.warning { border-left-color: var(--red); }
+    .step-title { font-weight: 600; display: flex; align-items: center; gap: 6px; cursor: default; }
+    .step-title .tag-t { margin-left: auto; font-size: 10.5px; color: var(--muted); font-weight: 500; font-variant-numeric: tabular-nums; }
     .step-detail {
-      color: var(--text-muted);
-      font-family: Consolas, Monaco, monospace;
-      font-size: 11.5px;
-      white-space: pre-wrap;
-      max-height: 140px;
-      overflow-y: auto;
+      margin-top: 5px; color: var(--muted); font-family: Consolas, Monaco, monospace; font-size: 11.5px;
+      white-space: pre-wrap; word-break: break-word; max-height: 120px; overflow: auto;
     }
-    .answer-body {
-      white-space: pre-wrap;
-      color: var(--text-main);
-    }
-    .answer-body code {
-      background: rgba(0, 0, 0, 0.35);
-      padding: 2px 5px;
-      border-radius: 4px;
-      font-family: Consolas, Monaco, monospace;
-      color: #7dd3fc;
-    }
+    .thinking { display: inline-flex; gap: 5px; align-items: center; color: var(--muted); font-size: 12.5px; }
+    .thinking i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: bounce 1.2s infinite ease-in-out; }
+    .thinking i:nth-child(2) { animation-delay: .15s; background: var(--violet); }
+    .thinking i:nth-child(3) { animation-delay: .3s; background: var(--green); }
+    @keyframes bounce { 0%, 80%, 100% { transform: translateY(0); opacity: .4; } 40% { transform: translateY(-6px); opacity: 1; } }
 
-    /* Input Box */
-    .composer {
-      padding: 14px 18px;
-      background: var(--bg-panel);
-      border-top: 1px solid var(--border);
-      display: flex;
-      gap: 10px;
-    }
+    .answer h3, .answer h4 { margin: 10px 0 6px; font-size: 14.5px; color: #e2e8f0; }
+    .answer p { margin: 4px 0; }
+    .answer ul { margin: 4px 0 4px 20px; }
+    .answer code { background: rgba(0,0,0,.4); padding: 1px 6px; border-radius: 5px; font-family: Consolas, Monaco, monospace; color: #7dd3fc; font-size: 12.5px; }
+    .answer pre { background: rgba(2,6,23,.8); border: 1px solid var(--border); border-radius: 9px; padding: 10px 12px; overflow: auto; margin: 8px 0; font-size: 12px; }
+    .answer pre code { background: none; padding: 0; color: #cbd5e1; }
+    .caret::after { content: "▍"; color: var(--accent); animation: blink 1s steps(1) infinite; margin-left: 1px; }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    .composer { padding: 14px 18px; display: flex; gap: 10px; align-items: flex-end; border-top: 1px solid var(--border); background: var(--panel); backdrop-filter: blur(12px); }
     .composer textarea {
-      flex: 1;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--text-main);
-      padding: 10px 12px;
-      font-size: 14px;
-      resize: none;
-      height: 46px;
-      outline: none;
+      flex: 1; resize: none; min-height: 44px; max-height: 140px; padding: 11px 13px; border-radius: 11px;
+      border: 1px solid var(--border); background: rgba(15,23,42,.8); color: var(--text); font: inherit; font-size: 14px; outline: none;
+      transition: border-color .2s, box-shadow .2s;
     }
-    .composer textarea:focus { border-color: var(--accent); }
+    .composer textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(56,189,248,.15); }
 
-    /* Right Inspector Sidebar */
-    .inspector {
-      background: var(--bg-panel);
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-    .tabs {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      border-bottom: 1px solid var(--border);
-      background: rgba(11, 15, 25, 0.5);
-    }
-    .tab {
-      padding: 12px 8px;
-      text-align: center;
-      font-size: 12.5px;
-      font-weight: 600;
-      color: var(--text-muted);
-      cursor: pointer;
-      border-bottom: 2px solid transparent;
-    }
-    .tab.active {
-      color: var(--accent);
-      border-bottom-color: var(--accent);
-      background: rgba(56, 189, 248, 0.06);
-    }
-    .tab-content {
-      flex: 1;
-      overflow-y: auto;
-      padding: 16px;
-      display: none;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .tab-content.active { display: flex; }
+    .inspector { display: flex; flex-direction: column; min-height: 0; background: var(--panel); backdrop-filter: blur(14px); }
+    .tabs { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 1px solid var(--border); }
+    .tab { padding: 13px 6px; text-align: center; font-size: 12.5px; font-weight: 600; color: var(--muted); cursor: pointer; transition: color .2s; }
+    .tab:hover { color: var(--text); }
+    .tab.active { color: var(--accent); }
+    .tab-ind { position: absolute; bottom: 0; left: 0; height: 2px; width: 33.333%; background: var(--grad); transition: transform .35s var(--ease); }
+    .tab-content { flex: 1; overflow-y: auto; padding: 16px; display: none; flex-direction: column; gap: 11px; }
+    .tab-content.active { display: flex; animation: rise .35s var(--ease) both; }
 
-    .card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 12px;
-    }
-    .card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 6px;
-    }
-    .card-title { font-weight: 600; font-size: 13.5px; color: #f9fafb; }
-    .card-desc { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
-    .tag {
-      display: inline-block;
-      padding: 2px 7px;
-      border-radius: 4px;
-      font-size: 11px;
-      background: rgba(168, 85, 247, 0.16);
-      color: #d8b4fe;
-      margin-right: 4px;
-      margin-top: 6px;
-    }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 11px; padding: 12px; transition: transform .25s var(--ease), border-color .25s, box-shadow .25s; animation: rise .4s var(--ease) both; }
+    .card:hover { transform: translateY(-2px); border-color: rgba(56,189,248,.45); box-shadow: 0 10px 28px rgba(0,0,0,.35); }
+    .card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .card-title { font-weight: 700; font-size: 13.5px; }
+    .card-desc { font-size: 12px; color: var(--muted); line-height: 1.55; }
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 5px; font-size: 11px; background: rgba(167,139,250,.15); color: #c4b5fd; margin: 6px 4px 0 0; }
+    .empty { text-align: center; color: var(--muted); font-size: 12.5px; padding: 26px 0; }
+    .meter { margin-top: 6px; }
+    .meter .bar { height: 7px; border-radius: 8px; background: rgba(148,163,184,.15); overflow: hidden; }
+    .meter .bar i { display: block; height: 100%; width: 0; border-radius: 8px; background: var(--grad); transition: width .9s var(--ease); }
+    .meter .lbl { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--muted); margin-bottom: 4px; }
 
-    /* Modal */
-    .modal-backdrop {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.7);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      z-index: 100;
+    .modal-bg { position: fixed; inset: 0; z-index: 50; background: rgba(2,6,23,.72); backdrop-filter: blur(6px); display: none; align-items: center; justify-content: center; }
+    .modal-bg.open { display: flex; animation: fade .25s ease both; }
+    @keyframes fade { from { opacity: 0; } }
+    .modal { width: 520px; max-width: 94vw; background: #0f172a; border: 1px solid var(--border); border-radius: 16px; padding: 22px; box-shadow: 0 30px 80px rgba(0,0,0,.6); animation: pop .4s var(--ease) both; }
+    @keyframes pop { from { opacity: 0; transform: translateY(20px) scale(.94); } }
+    .fg { margin-bottom: 14px; }
+    .fg label { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 6px; }
+    .fg input { width: 100%; padding: 10px 12px; border-radius: 9px; border: 1px solid var(--border); background: rgba(30,41,59,.8); color: var(--text); font-size: 13.5px; outline: none; transition: border-color .2s, box-shadow .2s; }
+    .fg input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(56,189,248,.15); }
+
+    #toasts { position: fixed; right: 18px; bottom: 18px; z-index: 99; display: flex; flex-direction: column; gap: 8px; }
+    .toast { padding: 10px 16px; border-radius: 10px; font-size: 13px; background: #0f172a; border: 1px solid var(--border); border-left: 3px solid var(--green); box-shadow: 0 10px 30px rgba(0,0,0,.5); animation: toast-in .4s var(--ease) both; }
+    .toast.err { border-left-color: var(--red); }
+    .toast.out { animation: toast-out .3s ease forwards; }
+    @keyframes toast-in { from { opacity: 0; transform: translateX(40px); } }
+    @keyframes toast-out { to { opacity: 0; transform: translateX(40px); } }
+
+    @media (max-width: 960px) {
+      .workspace { grid-template-columns: 1fr; }
+      .inspector { display: none; }
+      .gauges, .brand-sub { display: none; }
     }
-    .modal-backdrop.open { display: flex; }
-    .modal {
-      width: 520px;
-      max-width: 94vw;
-      background: var(--bg-panel);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 22px;
-    }
-    .form-group { margin-bottom: 14px; }
-    .form-group label {
-      display: block;
-      font-size: 12.5px;
-      color: var(--text-muted);
-      margin-bottom: 6px;
-    }
-    .form-group input {
-      width: 100%;
-      padding: 9px 12px;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      background: var(--bg-card);
-      color: var(--text-main);
-      font-size: 13.5px;
-    }
-    .preset-row {
-      display: flex;
-      gap: 6px;
-      margin-bottom: 14px;
-      flex-wrap: wrap;
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
     }
   </style>
 </head>
 <body>
+  <div class="aurora"></div>
+  <canvas id="bgCanvas"></canvas>
+
   <header>
     <div class="brand">
-      <div class="brand-logo">🦅</div>
+      <div class="logo">🦅</div>
       <div>
-        <div class="brand-title">AetherClaw (灵爪)</div>
-        <div class="brand-sub">OpenClaw 跨平台操控 × Hermes 记忆与自我进化框架</div>
+        <div class="brand-title">AetherClaw <span>灵爪</span></div>
+        <div class="brand-sub">OpenClaw 跨平台操控 × Hermes 记忆与自我进化</div>
       </div>
     </div>
     <div class="header-right">
-      <div class="badge" id="osBadge">
-        <span class="dot"></span>
-        <span>正在检测系统...</span>
+      <div class="gauges">
+        <div class="gauge" title="CPU">
+          <svg viewBox="0 0 36 36"><circle class="track" cx="18" cy="18" r="15"/><circle class="val" id="cpuRing" cx="18" cy="18" r="15"/></svg>
+          <div>CPU<b id="cpuTxt">--%</b></div>
+        </div>
+        <div class="gauge" title="Memory">
+          <svg viewBox="0 0 36 36"><circle class="track" cx="18" cy="18" r="15"/><circle class="val" id="memRing" cx="18" cy="18" r="15"/></svg>
+          <div>MEM<b id="memTxt">--%</b></div>
+        </div>
       </div>
-      <div class="badge" id="modeBadge">
-        <span>模式: 检测中</span>
-      </div>
-      <button class="btn btn-primary" onclick="openSettings()">⚙️ API 零代码设置</button>
+      <div class="badge" id="osBadge"><span class="dot off"></span><span>连接中…</span></div>
+      <div class="badge" id="modeBadge"><span>模式检测中</span></div>
+      <button class="btn btn-primary" id="settingsBtn">⚙️ API 设置</button>
     </div>
   </header>
 
   <div class="workspace">
-    <!-- Left Chat & Execution Trace -->
-    <section class="chat-column">
+    <section class="chat-col">
       <div class="quick-bar">
-        <span style="font-size:12px;color:var(--text-muted);">⚡ 一键实操指令:</span>
-        <button class="quick-chip" onclick="sendQuick('请对当前系统进行全面健康巡检')">🖥️ 系统健康巡检</button>
-        <button class="quick-chip" onclick="sendQuick('分析当前目录的文件结构')">📂 分析项目目录</button>
-        <button class="quick-chip" onclick="sendQuick('记住：我偏好结构化、带重点高亮的中文技术汇报')">🧠 写入长期记忆</button>
-        <button class="quick-chip" onclick="sendQuick('创建技能：高占用进程自动排查')">🧬 自我进化新技能</button>
+        <span style="font-size:12px;color:var(--muted);">⚡ 一键实操:</span>
+        <button class="chip" data-prompt="请对当前系统进行全面健康巡检">🖥️ 系统巡检</button>
+        <button class="chip" data-prompt="分析当前目录的文件结构">📂 分析目录</button>
+        <button class="chip" data-prompt="记住：我偏好结构化、带重点高亮的中文技术汇报">🧠 写入记忆</button>
+        <button class="chip" data-prompt="创建技能：高占用进程自动排查">🧬 进化新技能</button>
       </div>
-
       <div class="messages" id="messages">
-        <div class="msg msg-agent">
-          <div class="answer-body">👋 欢迎使用 <strong>AetherClaw (灵爪)</strong> 开源智能体控制台！
-我融合了 <strong>OpenClaw</strong> 的 Windows/Linux 跨平台终端操控能力与 <strong>Hermes</strong> 的长期记忆 & 技能自我进化机制。
-
-• <strong>无需编程</strong>：直接点击上方「⚡ 一键实操指令」或在下方输入任务即可立刻体验真实的本地工具调用。
-• <strong>接入大模型</strong>：点击右上角「⚙️ API 零代码设置」，可一键配置 DeepSeek、OpenAI、通义千问或本地 Ollama 模型。</div>
-        </div>
+        <div class="msg msg-agent"><div class="answer" id="welcome"></div></div>
       </div>
-
       <div class="composer">
-        <textarea id="promptInput" placeholder="输入你的指令（例如：巡检电脑状态 / 分析当前目录 / 记住我的偏好 / 创建技能... 回车发送）" onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();sendMessage();}"></textarea>
-        <button class="btn btn-primary" id="sendBtn" onclick="sendMessage()">发送指令 🚀</button>
+        <textarea id="promptInput" rows="1" placeholder="输入指令，Enter 发送，Shift+Enter 换行（例：执行命令: Get-Date）"></textarea>
+        <button class="btn btn-primary" id="sendBtn">发送 🚀</button>
       </div>
     </section>
 
-    <!-- Right Inspector Panel -->
     <aside class="inspector">
-      <div class="tabs">
-        <div class="tab active" onclick="switchTab('skills', this)">🧬 技能进化库</div>
-        <div class="tab" onclick="switchTab('memories', this)">🧠 长期记忆</div>
-        <div class="tab" onclick="switchTab('system', this)">🛠️ 系统与工具</div>
+      <div class="tabs" id="tabs">
+        <div class="tab active" data-tab="skills">🧬 技能库</div>
+        <div class="tab" data-tab="memories">🧠 记忆</div>
+        <div class="tab" data-tab="system">🛠️ 系统</div>
+        <div class="tab-ind" id="tabInd"></div>
       </div>
-
-      <!-- Tab 1: Self-Evolving Skills -->
       <div class="tab-content active" id="tab-skills">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <span style="font-size:12.5px;color:var(--text-muted);">Hermes 技能库 (`skills/*.md`)</span>
-          <button class="btn" style="padding:4px 10px;font-size:12px;" onclick="sendQuick('创建技能：自动化日志巡检')">+ 自动进化新技能</button>
-        </div>
         <div id="skillsList" style="display:flex;flex-direction:column;gap:10px;"></div>
       </div>
-
-      <!-- Tab 2: Long-Term Semantic Memories -->
       <div class="tab-content" id="tab-memories">
         <div style="display:flex;gap:6px;">
-          <input id="newMemInput" placeholder="手动添加一条长期记忆..." style="flex:1;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-card);color:#fff;font-size:12.5px;" />
-          <button class="btn btn-primary" style="padding:6px 12px;font-size:12px;" onclick="addManualMemory()">添加</button>
+          <input id="newMemInput" placeholder="手动添加一条长期记忆…" style="flex:1;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(15,23,42,.8);color:#fff;font-size:12.5px;outline:none;" />
+          <button class="btn btn-primary btn-sm" id="addMemBtn">添加</button>
         </div>
         <div id="memoriesList" style="display:flex;flex-direction:column;gap:10px;"></div>
       </div>
-
-      <!-- Tab 3: System Environment & Tools -->
       <div class="tab-content" id="tab-system">
-        <div class="card" id="sysDetailCard"></div>
-        <div style="font-size:12.5px;color:var(--text-muted);margin-top:4px;">OpenClaw 跨平台工具集</div>
+        <div class="card" id="sysCard"></div>
+        <div style="font-size:12.5px;color:var(--muted);">OpenClaw 跨平台工具集</div>
         <div id="toolsList" style="display:flex;flex-direction:column;gap:8px;"></div>
       </div>
     </aside>
   </div>
 
-  <!-- Zero-Code API Configuration Modal -->
-  <div class="modal-backdrop" id="settingsModal">
-    <div class="modal">
+  <div class="modal-bg" id="settingsModal">
+    <div class="modal" role="dialog" aria-modal="true">
       <h3 style="margin-bottom:8px;">⚙️ 大模型 API 零代码配置</h3>
-      <p style="font-size:12.5px;color:var(--text-muted);margin-bottom:14px;">
-        配置保存在本地 <code>data/config.local.json</code>（已被 <code>.gitignore</code> 保护，上传 GitHub 时绝不会泄露你的密钥）。
-      </p>
-      <div class="preset-row">
-        <button class="quick-chip" onclick="applyPreset('https://api.deepseek.com/v1', 'deepseek-chat')">DeepSeek 官方</button>
-        <button class="quick-chip" onclick="applyPreset('https://api.openai.com/v1', 'gpt-4o-mini')">OpenAI 官方</button>
-        <button class="quick-chip" onclick="applyPreset('https://dashscope.aliyuncs.com/compatible-mode/v1', 'qwen-plus')">通义千问 (Qwen)</button>
-        <button class="quick-chip" onclick="applyPreset('http://127.0.0.1:11434/v1', 'qwen2.5:7b')">Ollama 本地免费模型</button>
+      <p style="font-size:12.5px;color:var(--muted);margin-bottom:14px;">配置仅保存在本机 <code>data/config.local.json</code>，已被 <code>.gitignore</code> 保护，不会上传 GitHub。</p>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">
+        <button class="chip" data-preset="https://api.deepseek.com/v1|deepseek-chat">DeepSeek</button>
+        <button class="chip" data-preset="https://api.openai.com/v1|gpt-4o-mini">OpenAI</button>
+        <button class="chip" data-preset="https://dashscope.aliyuncs.com/compatible-mode/v1|qwen-plus">通义千问</button>
+        <button class="chip" data-preset="https://api.moonshot.cn/v1|moonshot-v1-32k">Kimi</button>
+        <button class="chip" data-preset="http://127.0.0.1:11434/v1|qwen2.5:7b">Ollama 本地</button>
       </div>
-      <div class="form-group">
-        <label>API 接口地址 (Base URL)</label>
-        <input id="cfgBaseUrl" placeholder="https://api.deepseek.com/v1" />
-      </div>
-      <div class="form-group">
-        <label>模型名称 (Model Name)</label>
-        <input id="cfgModel" placeholder="deepseek-chat" />
-      </div>
-      <div class="form-group">
-        <label>API Key 密钥 (留空则保持原密钥或使用免 Key 本地模式)</label>
-        <input id="cfgApiKey" type="password" placeholder="sk-..." />
-      </div>
+      <div class="fg"><label>API 接口地址 (Base URL)</label><input id="cfgBaseUrl" placeholder="https://api.deepseek.com/v1" /></div>
+      <div class="fg"><label>模型名称 (Model)</label><input id="cfgModel" placeholder="deepseek-chat" /></div>
+      <div class="fg"><label>API Key（留空则保持不变 / 使用免 Key 本地模式）</label><input id="cfgApiKey" type="password" placeholder="sk-..." autocomplete="off" /></div>
       <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px;">
-        <button class="btn" onclick="closeSettings()">取消</button>
-        <button class="btn btn-primary" onclick="saveSettings()">保存并生效</button>
+        <button class="btn" id="cancelSettings">取消</button>
+        <button class="btn btn-primary" id="saveSettings">保存并生效</button>
       </div>
     </div>
   </div>
+  <div id="toasts"></div>
 
   <script>
-    let appState = {};
+  (() => {
+    'use strict';
+    const $ = (s, r = document) => r.querySelector(s);
+    const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+    const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // ---------- Auth token (network-exposed mode) ----------
+    const urlToken = new URLSearchParams(location.search).get('token');
+    if (urlToken) { sessionStorage.setItem('ac_token', urlToken); history.replaceState(null, '', location.pathname); }
+    const TOKEN = sessionStorage.getItem('ac_token') || '';
+    const api = (path, opts = {}) => fetch(path, {
+      ...opts,
+      headers: { 'Content-Type': 'application/json', ...(TOKEN ? { 'x-aetherclaw-token': TOKEN } : {}), ...(opts.headers || {}) }
+    });
+
+    // ---------- Safe text / markdown-lite ----------
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    function md(src) {
+      let t = esc(src);
+      const blocks = [];
+      t = t.replace(/```(?:\w+)?\n?([\s\S]*?)```/g, (_, c) => { blocks.push(c.replace(/\n$/, '')); return `\u0000${blocks.length - 1}\u0000`; });
+      t = t.replace(/`([^`\n]+)`/g, '<code>$1</code>')
+           .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+           .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+           .replace(/^## (.+)$/gm, '<h3>$1</h3>');
+      const lines = t.split('\n'); const out = []; let list = false;
+      for (const ln of lines) {
+        if (/^\s*[-•] /.test(ln)) { if (!list) { out.push('<ul>'); list = true; } out.push('<li>' + ln.replace(/^\s*[-•] /, '') + '</li>'); }
+        else { if (list) { out.push('</ul>'); list = false; } out.push(ln.trim() === '' ? '' : (/^<h3>|^\u0000/.test(ln) ? ln : '<p>' + ln + '</p>')); }
+      }
+      if (list) out.push('</ul>');
+      return out.join('').replace(/\u0000(\d+)\u0000/g, (_, i) => `<pre><code>${blocks[+i]}</code></pre>`);
+    }
+
+    function toast(msg, isErr) {
+      const el = document.createElement('div');
+      el.className = 'toast' + (isErr ? ' err' : ''); el.textContent = msg;
+      $('#toasts').appendChild(el);
+      setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 320); }, 2600);
+    }
+
+    // ---------- Ripple ----------
+    document.addEventListener('pointerdown', (e) => {
+      const b = e.target.closest('.btn'); if (!b || reduceMotion) return;
+      const r = b.getBoundingClientRect(), d = Math.max(r.width, r.height);
+      const s = document.createElement('span'); s.className = 'ripple';
+      s.style.cssText = `width:${d}px;height:${d}px;left:${e.clientX - r.left - d / 2}px;top:${e.clientY - r.top - d / 2}px`;
+      b.appendChild(s); setTimeout(() => s.remove(), 620);
+    });
+
+    // ---------- Animated particle network background ----------
+    (function bg() {
+      if (reduceMotion) return;
+      const c = $('#bgCanvas'), x = c.getContext('2d'); let W, H, pts = [], mouse = { x: -999, y: -999 }, raf;
+      const init = () => {
+        W = c.width = innerWidth * devicePixelRatio; H = c.height = innerHeight * devicePixelRatio;
+        c.style.width = innerWidth + 'px'; c.style.height = innerHeight + 'px';
+        const n = Math.min(70, Math.floor(innerWidth * innerHeight / 22000));
+        pts = Array.from({ length: n }, () => ({ x: Math.random() * W, y: Math.random() * H, vx: (Math.random() - .5) * .35 * devicePixelRatio, vy: (Math.random() - .5) * .35 * devicePixelRatio }));
+      };
+      const step = () => {
+        x.clearRect(0, 0, W, H); const L = 130 * devicePixelRatio;
+        for (const p of pts) {
+          p.x += p.vx; p.y += p.vy;
+          if (p.x < 0 || p.x > W) p.vx *= -1; if (p.y < 0 || p.y > H) p.vy *= -1;
+          const dx = p.x - mouse.x, dy = p.y - mouse.y, d = Math.hypot(dx, dy);
+          if (d < 120 * devicePixelRatio) { p.x += dx / d * .6; p.y += dy / d * .6; }
+          x.fillStyle = 'rgba(125,211,252,.55)'; x.beginPath(); x.arc(p.x, p.y, 1.4 * devicePixelRatio, 0, 7); x.fill();
+        }
+        for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) {
+          const d = Math.hypot(pts[i].x - pts[j].x, pts[i].y - pts[j].y);
+          if (d < L) { x.strokeStyle = `rgba(129,140,248,${(1 - d / L) * .28})`; x.lineWidth = devicePixelRatio * .7; x.beginPath(); x.moveTo(pts[i].x, pts[i].y); x.lineTo(pts[j].x, pts[j].y); x.stroke(); }
+        }
+        raf = requestAnimationFrame(step);
+      };
+      addEventListener('resize', init);
+      addEventListener('pointermove', e => { mouse.x = e.clientX * devicePixelRatio; mouse.y = e.clientY * devicePixelRatio; });
+      document.addEventListener('visibilitychange', () => { cancelAnimationFrame(raf); if (!document.hidden) step(); });
+      init(); step();
+    })();
+
+    // ---------- State & rendering ----------
+    let state = {};
+    const CIRC = 94.25;
+    function setRing(id, txt, pct) {
+      const r = $(id); r.style.strokeDashoffset = CIRC * (1 - pct / 100);
+      r.style.stroke = pct > 85 ? 'var(--red)' : pct > 65 ? 'var(--amber)' : 'var(--accent)';
+      $(txt).textContent = pct + '%';
+    }
+    function countUp(el, to) {
+      const from = parseFloat(el.dataset.v || 0); el.dataset.v = to;
+      if (reduceMotion || from === to) { el.textContent = to; return; }
+      const t0 = performance.now();
+      (function f(t) { const k = Math.min(1, (t - t0) / 600); el.textContent = Math.round(from + (to - from) * (1 - Math.pow(1 - k, 3))); if (k < 1) requestAnimationFrame(f); })(t0);
+    }
+
+    function renderMetrics(m) {
+      setRing('#cpuRing', '#cpuTxt', m.cpuPercent); setRing('#memRing', '#memTxt', m.memPercent);
+      const cb = $('#cpuBar'); if (cb) { cb.style.width = m.cpuPercent + '%'; $('#cpuLbl').textContent = m.cpuPercent + '%'; }
+      const mb = $('#memBar'); if (mb) { mb.style.width = m.memPercent + '%'; $('#memLbl').textContent = `${m.memUsedGB} / ${m.memTotalGB} GB`; }
+    }
+
+    function render() {
+      const { system, config, skills = [], memories = [], tools = [], version } = state;
+      if (!system) return;
+      $('#osBadge').innerHTML = `<span class="dot"></span><span>${esc(system.osType)} · ${esc(system.shell)}</span>`;
+      $('#modeBadge').innerHTML = config.hasApiKey ? `<span>🟢 ${esc(config.model)}</span>` : `<span>⚡ 免 Key 本地模式</span>`;
+
+      $('#skillsList').innerHTML = skills.length ? skills.map((s, i) => `
+        <div class="card" style="animation-delay:${i * 50}ms">
+          <div class="card-head"><span class="card-title">🧬 ${esc(s.name)}</span><button class="chip" data-prompt="${esc('执行技能: ' + s.name)}">运行</button></div>
+          <div class="card-desc">${esc(s.description)}</div>
+          <div>${(s.triggerKeywords || []).slice(0, 6).map(k => `<span class="tag">${esc(k)}</span>`).join('')}</div>
+        </div>`).join('') : '<div class="empty">还没有技能，试试「进化新技能」</div>';
+
+      $('#memoriesList').innerHTML = memories.length ? memories.map((m, i) => `
+        <div class="card" style="animation-delay:${i * 30}ms">
+          <div class="card-head"><span class="tag" style="margin:0">${esc(m.category)}</span><button class="btn btn-sm" data-del="${esc(m.id)}">删除</button></div>
+          <div class="card-desc" style="color:var(--text)">${esc(m.content)}</div>
+        </div>`).join('') : '<div class="empty">记忆库为空</div>';
+
+      $('#sysCard').innerHTML = `
+        <div class="card-title" style="margin-bottom:8px">🖥️ 主机实时环境 <span style="color:var(--muted);font-weight:400">v${esc(version)}</span></div>
+        <div class="card-desc">• 系统: ${esc(system.osType)} (${esc(system.release)} / ${esc(system.arch)})<br>• 终端: ${esc(system.shell)}<br>• CPU: ${esc(system.cpuModel)} (${esc(system.cpuCores)} 核)<br>• Node: ${esc(system.nodeVersion)}</div>
+        <div class="meter"><div class="lbl"><span>CPU</span><span id="cpuLbl">--</span></div><div class="bar"><i id="cpuBar"></i></div></div>
+        <div class="meter"><div class="lbl"><span>内存</span><span id="memLbl">--</span></div><div class="bar"><i id="memBar"></i></div></div>`;
+      if (state.metrics) renderMetrics(state.metrics);
+
+      $('#toolsList').innerHTML = tools.map(t => `<div class="card" style="padding:9px 12px"><div class="card-title" style="font-size:12.5px;color:var(--accent)">🔧 ${esc(t.name)}</div><div class="card-desc">${esc(t.description)}</div></div>`).join('');
+    }
 
     async function loadStatus() {
-      const res = await fetch('/api/status');
-      appState = await res.json();
-      renderDashboard();
+      try {
+        const r = await api('/api/status');
+        if (r.status === 401) { toast('需要访问令牌：请使用启动日志中带 ?token= 的链接打开', true); return; }
+        state = await r.json(); render();
+      } catch (e) { toast('无法连接后端：' + e.message, true); }
+    }
+    setInterval(async () => {
+      if (document.hidden) return;
+      try { const m = await (await api('/api/metrics')).json(); if (m.cpuPercent !== undefined) { state.metrics = m; renderMetrics(m); } } catch (_) {}
+    }, 2500);
+
+    // ---------- Tabs with sliding indicator ----------
+    function switchTab(id) {
+      const tabs = $$('.tab'); const idx = tabs.findIndex(t => t.dataset.tab === id);
+      tabs.forEach((t, i) => t.classList.toggle('active', i === idx));
+      $$('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-' + id));
+      $('#tabInd').style.transform = `translateX(${idx * 100}%)`;
     }
 
-    function renderDashboard() {
-      const { system, config, skills, memories, tools } = appState;
-      document.getElementById('osBadge').innerHTML = `<span class="dot"></span><span>${system.osType} (${system.shell})</span>`;
-      document.getElementById('modeBadge').innerHTML = config.hasApiKey
-        ? `<span>🟢 大模型已连接 (${config.model})</span>`
-        : `<span>⚡ 免 Key 本地自主模式</span>`;
+    // ---------- Chat with live SSE streaming ----------
+    let sending = false;
+    const msgs = $('#messages');
+    const scrollDown = () => { msgs.scrollTop = msgs.scrollHeight; };
 
-      // Render Skills
-      const skillsEl = document.getElementById('skillsList');
-      skillsEl.innerHTML = (skills || []).map(s => `
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">🧬 ${s.name}</span>
-            <button class="quick-chip" onclick="sendQuick('执行技能: ${s.name}')">运行</button>
-          </div>
-          <div class="card-desc">${s.description}</div>
-          <div>${(s.triggerKeywords || []).map(k => `<span class="tag">${k}</span>`).join('')}</div>
-        </div>
-      `).join('');
-
-      // Render Memories
-      const memEl = document.getElementById('memoriesList');
-      memEl.innerHTML = (memories || []).map(m => `
-        <div class="card">
-          <div class="card-header">
-            <span class="tag" style="margin:0;">${m.category}</span>
-            <button class="btn" style="padding:2px 7px;font-size:11px;" onclick="deleteMemory('${m.id}')">删除</button>
-          </div>
-          <div class="card-desc" style="color:#f3f4f6;margin-top:6px;">${m.content}</div>
-        </div>
-      `).join('');
-
-      // Render System & Tools
-      document.getElementById('sysDetailCard').innerHTML = `
-        <div class="card-title" style="margin-bottom:6px;">🖥️ 主机实时环境</div>
-        <div class="card-desc">
-          • 系统: ${system.osType} (${system.release} / ${system.arch})<br/>
-          • 终端: ${system.shell}<br/>
-          • CPU: ${system.cpuModel} (${system.cpuCores} 核)<br/>
-          • 内存: ${system.memory}<br/>
-          • Node: ${system.nodeVersion}
-        </div>
-      `;
-      document.getElementById('toolsList').innerHTML = (tools || []).map(t => `
-        <div class="card" style="padding:9px 12px;">
-          <div class="card-title" style="font-size:12.5px;color:#38bdf8;">🔧 ${t.name}</div>
-          <div class="card-desc">${t.description}</div>
-        </div>
-      `).join('');
+    function addStep(box, st, t0) {
+      const detailSrc = st.detail || (st.args && Object.keys(st.args).length ? JSON.stringify(st.args) : '') || (st.result ? JSON.stringify(st.result, null, 2) : '');
+      const icon = { thought: '💭', tool_call: '🛠️', observation: '👁️', skill_match: '🧬', warning: '⚠️' }[st.type] || '⚡';
+      const el = document.createElement('div'); el.className = 'step ' + esc(st.type);
+      el.innerHTML = `<div class="step-title">${icon} ${esc(st.title || st.type)}<span class="tag-t">+${((Date.now() - t0) / 1000).toFixed(1)}s</span></div>${detailSrc ? `<div class="step-detail">${esc(String(detailSrc).slice(0, 2000))}</div>` : ''}`;
+      box.appendChild(el); scrollDown();
     }
 
-    function switchTab(tabId, el) {
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-      el.classList.add('active');
-      document.getElementById('tab-' + tabId).classList.add('active');
+    function typewriter(el, text, done) {
+      if (reduceMotion || text.length > 6000) { el.innerHTML = md(text); return done && done(); }
+      let i = 0; const per = Math.max(2, Math.ceil(text.length / 160));
+      el.classList.add('caret');
+      (function tick() {
+        i = Math.min(text.length, i + per);
+        el.innerHTML = md(text.slice(0, i)); scrollDown();
+        if (i < text.length) requestAnimationFrame(tick); else { el.classList.remove('caret'); done && done(); }
+      })();
     }
 
-    function sendQuick(text) {
-      document.getElementById('promptInput').value = text;
-      sendMessage();
-    }
+    async function send(promptText) {
+      const input = $('#promptInput'); const prompt = (promptText ?? input.value).trim();
+      if (!prompt || sending) return;
+      sending = true; $('#sendBtn').disabled = true; input.value = ''; input.style.height = 'auto';
 
-    async function sendMessage() {
-      const input = document.getElementById('promptInput');
-      const prompt = input.value.trim();
-      if (!prompt) return;
-      input.value = '';
-
-      const messagesEl = document.getElementById('messages');
-      messagesEl.innerHTML += `<div class="msg msg-user">${escapeHtml(prompt)}</div>`;
-
-      const loadingId = 'loading_' + Date.now();
-      messagesEl.innerHTML += `<div class="msg msg-agent" id="${loadingId}"><div class="answer-body">🦅 AetherClaw 正在规划并调用跨平台工具...</div></div>`;
-      messagesEl.scrollTop = messagesEl.scrollHeight;
+      const u = document.createElement('div'); u.className = 'msg msg-user'; u.textContent = prompt; msgs.appendChild(u);
+      const a = document.createElement('div'); a.className = 'msg msg-agent';
+      a.innerHTML = `<div class="steps"></div><div class="thinking"><i></i><i></i><i></i><span style="margin-left:6px">AetherClaw 正在规划…</span></div><div class="answer"></div>`;
+      msgs.appendChild(a); scrollDown();
+      const stepsBox = $('.steps', a), think = $('.thinking', a), ans = $('.answer', a), t0 = Date.now();
 
       try {
-        const res = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt })
-        });
-        const data = await res.json();
-        const stepsHtml = (data.steps || []).map(st => {
-          const detail = st.detail || (st.args ? JSON.stringify(st.args) : '') || (st.result ? JSON.stringify(st.result, null, 2) : '');
-          return `
-            <div class="step-item ${st.type}">
-              <div class="step-title">⚡ ${escapeHtml(st.title || st.type)}</div>
-              ${detail ? `<div class="step-detail">${escapeHtml(detail)}</div>` : ''}
-            </div>
-          `;
-        }).join('');
-
-        document.getElementById(loadingId).innerHTML = `
-          ${stepsHtml ? `<div class="step-list">${stepsHtml}</div>` : ''}
-          <div class="answer-body">${formatAnswer(data.finalAnswer || data.error || '执行完成')}</div>
-        `;
-
-        if (data.memories) appState.memories = data.memories;
-        if (data.skills) appState.skills = data.skills;
-        renderDashboard();
+        const res = await api('/api/chat/stream', { method: 'POST', body: JSON.stringify({ prompt }) });
+        if (!res.ok || !res.body) throw new Error((await res.json().catch(() => ({}))).error || ('HTTP ' + res.status));
+        const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '', final = null;
+        for (;;) {
+          const { value, done } = await reader.read(); if (done) break;
+          buf += dec.decode(value, { stream: true });
+          let i; while ((i = buf.indexOf('\n\n')) >= 0) {
+            const chunk = buf.slice(0, i); buf = buf.slice(i + 2);
+            const ev = /^event: (.+)$/m.exec(chunk)?.[1]; const data = /^data: (.+)$/m.exec(chunk)?.[1];
+            if (!ev || !data) continue; const p = JSON.parse(data);
+            if (ev === 'step') addStep(stepsBox, p, t0);
+            else if (ev === 'done') final = p; else if (ev === 'error') throw new Error(p.error);
+          }
+        }
+        think.remove();
+        if (final) {
+          Object.assign(state, { memories: final.memories, skills: final.skills }); render();
+          typewriter(ans, final.finalAnswer || '执行完成');
+        }
       } catch (err) {
-        document.getElementById(loadingId).innerHTML = `<div class="answer-body" style="color:var(--danger);">执行出错: ${escapeHtml(err.message)}</div>`;
-      }
-      messagesEl.scrollTop = messagesEl.scrollHeight;
+        think.remove(); ans.innerHTML = `<span style="color:var(--red)">执行出错：${esc(err.message)}</span>`; toast('执行失败', true);
+      } finally { sending = false; $('#sendBtn').disabled = false; scrollDown(); }
     }
 
-    async function addManualMemory() {
-      const input = document.getElementById('newMemInput');
-      const content = input.value.trim();
-      if (!content) return;
-      input.value = '';
-      const res = await fetch('/api/memory', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, category: 'manual_note' })
-      });
-      const data = await res.json();
-      appState.memories = data.memories;
-      renderDashboard();
-    }
-
-    async function deleteMemory(id) {
-      const res = await fetch('/api/memory/' + encodeURIComponent(id), { method: 'DELETE' });
-      const data = await res.json();
-      appState.memories = data.memories;
-      renderDashboard();
-    }
-
+    // ---------- Settings ----------
     function openSettings() {
-      const cfg = appState.config || {};
-      document.getElementById('cfgBaseUrl').value = cfg.baseUrl || '';
-      document.getElementById('cfgModel').value = cfg.model || '';
-      document.getElementById('cfgApiKey').value = '';
-      document.getElementById('cfgApiKey').placeholder = cfg.apiKeyMasked ? `已保存 (${cfg.apiKeyMasked})，留空则不修改` : 'sk-...';
-      document.getElementById('settingsModal').classList.add('open');
+      const c = state.config || {};
+      $('#cfgBaseUrl').value = c.baseUrl || ''; $('#cfgModel').value = c.model || ''; $('#cfgApiKey').value = '';
+      $('#cfgApiKey').placeholder = c.apiKeyMasked ? `已保存 (${c.apiKeyMasked})，留空不修改` : 'sk-...';
+      $('#settingsModal').classList.add('open');
     }
+    const closeSettings = () => $('#settingsModal').classList.remove('open');
 
-    function closeSettings() {
-      document.getElementById('settingsModal').classList.remove('open');
-    }
+    // ---------- Event delegation (no inline handlers → CSP/XSS friendly) ----------
+    document.addEventListener('click', async (e) => {
+      const t = e.target;
+      const p = t.closest('[data-prompt]'); if (p) return send(p.dataset.prompt);
+      const tab = t.closest('.tab'); if (tab) return switchTab(tab.dataset.tab);
+      const del = t.closest('[data-del]');
+      if (del) { const r = await (await api('/api/memory/' + encodeURIComponent(del.dataset.del), { method: 'DELETE' })).json(); state.memories = r.memories; render(); return toast('记忆已删除'); }
+      const preset = t.closest('[data-preset]');
+      if (preset) { const [u, m] = preset.dataset.preset.split('|'); $('#cfgBaseUrl').value = u; $('#cfgModel').value = m; return; }
+      if (t.id === 'settingsModal') closeSettings();
+    });
+    $('#settingsBtn').onclick = openSettings; $('#cancelSettings').onclick = closeSettings;
+    $('#saveSettings').onclick = async () => {
+      const body = { baseUrl: $('#cfgBaseUrl').value.trim(), model: $('#cfgModel').value.trim(), apiKey: $('#cfgApiKey').value.trim() };
+      const r = await (await api('/api/config', { method: 'POST', body: JSON.stringify(body) })).json();
+      state.config = r.config; closeSettings(); render(); toast('✅ 配置已保存并生效');
+    };
+    $('#addMemBtn').onclick = async () => {
+      const el = $('#newMemInput'); const content = el.value.trim(); if (!content) return; el.value = '';
+      const r = await (await api('/api/memory', { method: 'POST', body: JSON.stringify({ content, category: 'manual_note' }) })).json();
+      state.memories = r.memories; render(); toast('🧠 记忆已写入');
+    };
+    $('#newMemInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('#addMemBtn').click(); });
+    $('#sendBtn').onclick = () => send();
+    const ta = $('#promptInput');
+    ta.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
+    ta.addEventListener('input', () => { ta.style.height = 'auto'; ta.style.height = Math.min(140, ta.scrollHeight) + 'px'; });
+    addEventListener('keydown', e => { if (e.key === 'Escape') closeSettings(); });
 
-    function applyPreset(baseUrl, model) {
-      document.getElementById('cfgBaseUrl').value = baseUrl;
-      document.getElementById('cfgModel').value = model;
-    }
-
-    async function saveSettings() {
-      const baseUrl = document.getElementById('cfgBaseUrl').value.trim();
-      const model = document.getElementById('cfgModel').value.trim();
-      const apiKey = document.getElementById('cfgApiKey').value.trim();
-      const res = await fetch('/api/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ baseUrl, model, apiKey })
-      });
-      const data = await res.json();
-      appState.config = data.config;
-      closeSettings();
-      renderDashboard();
-    }
-
-    function escapeHtml(str) {
-      return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    }
-
-    function formatAnswer(str) {
-      return escapeHtml(str)
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-        .replace(/`([^`\n]+)`/g, '<code>$1</code>');
-    }
-
+    // ---------- Boot ----------
+    typewriter($('#welcome'), '👋 欢迎使用 **AetherClaw (灵爪)**！\n融合 **OpenClaw** 的 Windows/Linux 跨平台终端操控与 **Hermes** 的长期记忆 & 技能自我进化。\n- 无需编程：点击上方「⚡ 一键实操」立刻体验真实本地工具调用\n- 接入大模型：右上角「⚙️ API 设置」一键配置 DeepSeek / OpenAI / 通义千问 / Ollama');
     loadStatus();
+  })();
   </script>
 </body>
 </html>

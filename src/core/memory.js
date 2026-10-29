@@ -1,4 +1,4 @@
-/**
+﻿/**
  * AetherClaw (灵爪) - Hermes-Style Hierarchical Memory & Self-Evolving Skill Engine
  * 灵感源自 Hermes Agent 的三层自我进化架构：
  * 1. Episodic Memory (情景记忆): 记录任务交互历史与执行轨迹
@@ -9,8 +9,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const DATA_DIR = path.join(process.cwd(), 'data');
-const SKILLS_DIR = path.join(process.cwd(), 'skills');
+const { DATA_DIR, SKILLS_DIR, ensureDir, atomicWrite } = require('./paths');
 const MEMORY_FILE = path.join(DATA_DIR, 'memory.json');
 
 const INITIAL_MEMORIES = [
@@ -79,8 +78,8 @@ class MemoryAndSkillEngine {
   }
 
   ensureDirs() {
-    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-    if (!fs.existsSync(SKILLS_DIR)) fs.mkdirSync(SKILLS_DIR, { recursive: true });
+    ensureDir(DATA_DIR);
+    ensureDir(SKILLS_DIR);
   }
 
   loadMemoryState() {
@@ -99,13 +98,13 @@ class MemoryAndSkillEngine {
       semanticMemories: INITIAL_MEMORIES,
       episodicHistory: []
     };
-    fs.writeFileSync(MEMORY_FILE, JSON.stringify(initial, null, 2), 'utf8');
+    atomicWrite(MEMORY_FILE, JSON.stringify(initial, null, 2));
     return initial;
   }
 
   saveMemoryState() {
     this.ensureDirs();
-    fs.writeFileSync(MEMORY_FILE, JSON.stringify(this.state, null, 2), 'utf8');
+    atomicWrite(MEMORY_FILE, JSON.stringify(this.state, null, 2));
   }
 
   ensureBuiltinSkills() {
@@ -121,7 +120,7 @@ class MemoryAndSkillEngine {
     this.ensureDirs();
     const jsonPath = path.join(SKILLS_DIR, `${skill.id}.json`);
     const mdPath = path.join(SKILLS_DIR, `${skill.id}.md`);
-    fs.writeFileSync(jsonPath, JSON.stringify(skill, null, 2), 'utf8');
+    atomicWrite(jsonPath, JSON.stringify(skill, null, 2));
 
     // Simultaneously generate a human-readable SKILL.md (Hermes / OpenClaw compatible standard)
     const mdContent = [
@@ -147,7 +146,7 @@ class MemoryAndSkillEngine {
       `- **Linux (Bash)**: \`${(skill.commandTemplate && skill.commandTemplate.linux) || 'N/A'}\``,
       ``
     ].join('\n');
-    fs.writeFileSync(mdPath, mdContent, 'utf8');
+    atomicWrite(mdPath, mdContent);
   }
 
   /**

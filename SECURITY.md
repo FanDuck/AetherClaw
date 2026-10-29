@@ -14,6 +14,13 @@ AetherClaw (灵爪) 作为一个具备本地操作系统执行能力的自主 AI
    - `/api/status` 接口对 `apiKey` 进行首尾掩码脱敏处理（如 `sk-1...abcd`）。
    - `.gitignore` 严格忽略 `.env` 与 `data/config.local.json`，避免用户误将私钥提交至公开仓库。
 
+5. **跨站与重绑定防护**：校验 `Host` 头（防 DNS Rebinding）与 `Origin`（防恶意网页调用本地 Agent），无 CORS 通配。
+6. **网络暴露需 Token**：`HOST` 为非回环地址时强制 `x-aetherclaw-token` 鉴权（可用 `AETHERCLAW_TOKEN` 指定）。
+7. **严格 CSP 与输出转义**，防御 XSS。
+8. **Windows 命令使用 `-EncodedCommand`**，规避转义注入；超时终止整个进程树。
+
+> ⚠️ 正则护栏是最后一道防线而非沙箱。请勿在不可信环境将 Agent 暴露到公网；生产环境建议配合容器/低权限用户运行。
+
 ## 2. 报告安全漏洞 (Reporting a Vulnerability)
 
 如果你在 AetherClaw 中发现了潜在的安全绕过风险或漏洞，请通过 GitHub Issues 或联系仓库维护者 [@FanDuck](https://github.com/FanDuck) 进行反馈，我们将在第一时间修复并发布安全补丁。
