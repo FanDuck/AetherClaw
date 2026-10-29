@@ -1,0 +1,20 @@
+services:
+  aetherclaw:
+    build: .
+    container_name: aetherclaw
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3721}:3721"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=3721
+      - AETHERCLAW_TOKEN=${AETHERCLAW_TOKEN:-}
+      - LLM_BASE_URL=${LLM_BASE_URL:-https://api.deepseek.com/v1}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_MODEL=${LLM_MODEL:-deepseek-chat}
+      - ALLOW_SHELL_EXEC=${ALLOW_SHELL_EXEC:-true}
+      - ALLOW_FILE_WRITE=${ALLOW_FILE_WRITE:-true}
+      - AUTO_EVOLVE_SKILLS=${AUTO_EVOLVE_SKILLS:-true}
+    volumes:
+      - ./data:/app/data
+      - ./skills:/app/skills

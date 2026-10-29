@@ -239,8 +239,13 @@
         <span style="font-size:12px;color:var(--muted);">⚡ 一键实操:</span>
         <button class="chip" data-prompt="请对当前系统进行全面健康巡检">🖥️ 系统巡检</button>
         <button class="chip" data-prompt="分析当前目录的文件结构">📂 分析目录</button>
+        <button class="chip" data-prompt="把刚才的结果保存为 report.md">💾 保存上次结果</button>
         <button class="chip" data-prompt="记住：我偏好结构化、带重点高亮的中文技术汇报">🧠 写入记忆</button>
         <button class="chip" data-prompt="创建技能：高占用进程自动排查">🧬 进化新技能</button>
+        <div style="margin-left:auto;display:flex;gap:6px;">
+          <button class="btn btn-sm" id="exportChatBtn" title="将当前对话导出为 Markdown 文件">📥 导出对话</button>
+          <button class="btn btn-sm" id="clearChatBtn" title="清空当前多轮对话上下文">🧹 清空会话</button>
+        </div>
       </div>
       <div class="messages" id="messages">
         <div class="msg msg-agent"><div class="answer" id="welcome"></div></div>
@@ -259,6 +264,11 @@
         <div class="tab-ind" id="tabInd"></div>
       </div>
       <div class="tab-content active" id="tab-skills">
+        <div style="display:flex;gap:6px;justify-content:space-between;align-items:center;">
+          <button class="btn btn-primary btn-sm" id="newSkillBtn">➕ 新建/编辑技能</button>
+          <button class="btn btn-sm" id="importSkillBtn">📤 导入 SKILL.md</button>
+          <input type="file" id="skillFileInput" accept=".md,.markdown,.txt" style="display:none" />
+        </div>
         <div id="skillsList" style="display:flex;flex-direction:column;gap:10px;"></div>
       </div>
       <div class="tab-content" id="tab-memories">
@@ -293,6 +303,27 @@
       <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px;">
         <button class="btn" id="cancelSettings">取消</button>
         <button class="btn btn-primary" id="saveSettings">保存并生效</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Visual Skill Editor Modal -->
+  <div class="modal-bg" id="skillModal">
+    <div class="modal" role="dialog" aria-modal="true" style="width:580px;max-height:92vh;overflow-y:auto;">
+      <h3 style="margin-bottom:6px;">🧬 技能可视化编辑器 (SKILL.md)</h3>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:12px;">保存后将自动生成 <code>skills/&lt;id&gt;.json</code> 与开源标准 <code>skills/&lt;id&gt;.md</code>。</p>
+      <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:10px;">
+        <div class="fg"><label>技能 ID (英文/下划线)</label><input id="skId" placeholder="port_scanner" /></div>
+        <div class="fg"><label>技能名称 (Name)</label><input id="skName" placeholder="本地端口占用排查" /></div>
+      </div>
+      <div class="fg"><label>功能描述 (Description)</label><input id="skDesc" placeholder="快速排查当前 Windows 或 Linux 主机监听中的端口与进程" /></div>
+      <div class="fg"><label>触发关键词 (逗号分隔)</label><input id="skKeywords" placeholder="端口, 监听, port, 占用" /></div>
+      <div class="fg"><label>执行步骤 (每行一步)</label><textarea id="skSteps" rows="3" style="width:100%;padding:9px 12px;border-radius:9px;border:1px solid var(--border);background:rgba(30,41,59,.8);color:var(--text);font-size:13px;outline:none;resize:vertical;" placeholder="1. 检测当前操作系统环境&#10;2. 执行对应端口监听查询命令&#10;3. 汇总输出端口与进程列表"></textarea></div>
+      <div class="fg"><label>Windows PowerShell 命令模板 (可选)</label><input id="skWinCmd" placeholder="Get-NetTCPConnection -State Listen | Select-Object -First 15 LocalAddress, LocalPort, OwningProcess" /></div>
+      <div class="fg"><label>Linux Bash 命令模板 (可选)</label><input id="skLinuxCmd" placeholder="ss -tulnp | head -n 15" /></div>
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px;">
+        <button class="btn" id="cancelSkill">取消</button>
+        <button class="btn btn-primary" id="saveSkill">保存技能 💾</button>
       </div>
     </div>
   </div>
@@ -407,9 +438,18 @@
       $('#osBadge').innerHTML = `<span class="dot"></span><span>${esc(system.osType)} · ${esc(system.shell)}</span>`;
       $('#modeBadge').innerHTML = config.hasApiKey ? `<span>🟢 ${esc(config.model)}</span>` : `<span>⚡ 免 Key 本地模式</span>`;
 
+      const builtins = new Set(['sys_health_check', 'workspace_organizer']);
       $('#skillsList').innerHTML = skills.length ? skills.map((s, i) => `
         <div class="card" style="animation-delay:${i * 50}ms">
-          <div class="card-head"><span class="card-title">🧬 ${esc(s.name)}</span><button class="chip" data-prompt="${esc('执行技能: ' + s.name)}">运行</button></div>
+          <div class="card-head">
+            <span class="card-title">🧬 ${esc(s.name)}</span>
+            <div style="display:flex;gap:4px;align-items:center;">
+              <button class="chip" data-prompt="${esc('执行技能: ' + s.name)}" title="执行该技能">▶ 运行</button>
+              <button class="btn btn-sm" data-edit-skill="${esc(s.id)}" title="在可视化编辑器中编辑">✏️</button>
+              <button class="btn btn-sm" data-export-skill="${esc(s.id)}" title="下载 SKILL.md">📥</button>
+              ${builtins.has(s.id) ? '' : `<button class="btn btn-sm" data-del-skill="${esc(s.id)}" title="删除此自定义技能">🗑️</button>`}
+            </div>
+          </div>
           <div class="card-desc">${esc(s.description)}</div>
           <div>${(s.triggerKeywords || []).slice(0, 6).map(k => `<span class="tag">${esc(k)}</span>`).join('')}</div>
         </div>`).join('') : '<div class="empty">还没有技能，试试「进化新技能」</div>';
@@ -488,7 +528,7 @@
       try {
         const res = await api('/api/chat/stream', { method: 'POST', body: JSON.stringify({ prompt }) });
         if (!res.ok || !res.body) throw new Error((await res.json().catch(() => ({}))).error || ('HTTP ' + res.status));
-        const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '', final = null;
+        const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '', final = null, streamed = '';
         for (;;) {
           const { value, done } = await reader.read(); if (done) break;
           buf += dec.decode(value, { stream: true });
@@ -497,20 +537,32 @@
             const ev = /^event: (.+)$/m.exec(chunk)?.[1]; const data = /^data: (.+)$/m.exec(chunk)?.[1];
             if (!ev || !data) continue; const p = JSON.parse(data);
             if (ev === 'step') addStep(stepsBox, p, t0);
+            else if (ev === 'token' && p.delta) {
+              if (think.parentNode) think.remove();
+              streamed += p.delta;
+              ans.classList.add('caret');
+              ans.innerHTML = md(streamed);
+              scrollDown();
+            }
             else if (ev === 'done') final = p; else if (ev === 'error') throw new Error(p.error);
           }
         }
-        think.remove();
+        if (think.parentNode) think.remove();
+        ans.classList.remove('caret');
         if (final) {
-          Object.assign(state, { memories: final.memories, skills: final.skills }); render();
-          typewriter(ans, final.finalAnswer || '执行完成');
+          Object.assign(state, { memories: final.memories, skills: final.skills, episodes: final.episodes }); render();
+          if (streamed) {
+            ans.innerHTML = md(final.finalAnswer || streamed);
+          } else {
+            typewriter(ans, final.finalAnswer || '执行完成');
+          }
         }
       } catch (err) {
         think.remove(); ans.innerHTML = `<span style="color:var(--red)">执行出错：${esc(err.message)}</span>`; toast('执行失败', true);
       } finally { sending = false; $('#sendBtn').disabled = false; scrollDown(); }
     }
 
-    // ---------- Settings ----------
+    // ---------- Settings & Skill Editor ----------
     function openSettings() {
       const c = state.config || {};
       $('#cfgBaseUrl').value = c.baseUrl || ''; $('#cfgModel').value = c.model || ''; $('#cfgApiKey').value = '';
@@ -519,6 +571,18 @@
     }
     const closeSettings = () => $('#settingsModal').classList.remove('open');
 
+    function openSkillEditor(skill) {
+      $('#skId').value = skill ? skill.id : '';
+      $('#skName').value = skill ? skill.name : '';
+      $('#skDesc').value = skill ? skill.description : '';
+      $('#skKeywords').value = skill && skill.triggerKeywords ? skill.triggerKeywords.join(', ') : '';
+      $('#skSteps').value = skill && skill.steps ? skill.steps.join('\n') : '';
+      $('#skWinCmd').value = skill && skill.commandTemplate ? (skill.commandTemplate.win32 || '') : '';
+      $('#skLinuxCmd').value = skill && skill.commandTemplate ? (skill.commandTemplate.linux || '') : '';
+      $('#skillModal').classList.add('open');
+    }
+    const closeSkillEditor = () => $('#skillModal').classList.remove('open');
+
     // ---------- Event delegation (no inline handlers → CSP/XSS friendly) ----------
     document.addEventListener('click', async (e) => {
       const t = e.target;
@@ -526,11 +590,64 @@
       const tab = t.closest('.tab'); if (tab) return switchTab(tab.dataset.tab);
       const del = t.closest('[data-del]');
       if (del) { const r = await (await api('/api/memory/' + encodeURIComponent(del.dataset.del), { method: 'DELETE' })).json(); state.memories = r.memories; render(); return toast('记忆已删除'); }
+      const editSk = t.closest('[data-edit-skill]');
+      if (editSk) { const sk = (state.skills || []).find(s => s.id === editSk.dataset.editSkill); return openSkillEditor(sk); }
+      const expSk = t.closest('[data-export-skill]');
+      if (expSk) {
+        const r = await (await api('/api/skills/' + encodeURIComponent(expSk.dataset.exportSkill) + '/md')).json();
+        if (r.error) return toast(r.error, true);
+        const blob = new Blob([r.markdown], { type: 'text/markdown;charset=utf-8' });
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = r.filename; a.click(); URL.revokeObjectURL(a.href);
+        return toast('📥 已导出 ' + r.filename);
+      }
+      const delSk = t.closest('[data-del-skill]');
+      if (delSk) {
+        const r = await (await api('/api/skills/' + encodeURIComponent(delSk.dataset.delSkill), { method: 'DELETE' })).json();
+        if (r.error) return toast(r.error, true);
+        state.skills = r.skills; render(); return toast('🗑️ 技能已删除');
+      }
       const preset = t.closest('[data-preset]');
       if (preset) { const [u, m] = preset.dataset.preset.split('|'); $('#cfgBaseUrl').value = u; $('#cfgModel').value = m; return; }
       if (t.id === 'settingsModal') closeSettings();
+      if (t.id === 'skillModal') closeSkillEditor();
     });
     $('#settingsBtn').onclick = openSettings; $('#cancelSettings').onclick = closeSettings;
+    $('#newSkillBtn').onclick = () => openSkillEditor(null); $('#cancelSkill').onclick = closeSkillEditor;
+    $('#saveSkill').onclick = async () => {
+      const name = $('#skName').value.trim();
+      if (!name) return toast('请填写技能名称', true);
+      const body = {
+        id: $('#skId').value.trim() || name,
+        name,
+        description: $('#skDesc').value.trim() || name,
+        triggerKeywords: $('#skKeywords').value.split(',').map(s => s.trim()).filter(Boolean),
+        steps: $('#skSteps').value.split('\n').map(s => s.trim()).filter(Boolean),
+        win32Command: $('#skWinCmd').value.trim(),
+        linuxCommand: $('#skLinuxCmd').value.trim()
+      };
+      const r = await (await api('/api/skills', { method: 'POST', body: JSON.stringify(body) })).json();
+      if (r.error) return toast(r.error, true);
+      state.skills = r.skills; closeSkillEditor(); render(); toast('🧬 技能已保存并生成 SKILL.md');
+    };
+    $('#importSkillBtn').onclick = () => $('#skillFileInput').click();
+    $('#skillFileInput').onchange = async (e) => {
+      const f = e.target.files && e.target.files[0]; if (!f) return;
+      const markdown = await f.text(); e.target.value = '';
+      const r = await (await api('/api/skills/import', { method: 'POST', body: JSON.stringify({ markdown }) })).json();
+      if (r.error) return toast('导入失败：' + r.error, true);
+      state.skills = r.skills; render(); toast('📤 已导入技能：' + r.skill.name);
+    };
+    $('#clearChatBtn').onclick = async () => {
+      await api('/api/conversation', { method: 'DELETE' });
+      msgs.innerHTML = `<div class="msg msg-agent"><div class="answer">🧹 会话上下文已清空，可以开始新的多轮对话了。</div></div>`;
+      toast('🧹 多轮对话上下文已清空');
+    };
+    $('#exportChatBtn').onclick = () => {
+      const items = $$('.msg', msgs).map(m => m.classList.contains('msg-user') ? `## 👤 用户\n\n${m.textContent.trim()}\n` : `## 🦅 AetherClaw\n\n${($('.answer', m)?.innerText || m.innerText).trim()}\n`);
+      const blob = new Blob([`# AetherClaw 对话导出记录 (${new Date().toLocaleString()})\n\n` + items.join('\n---\n\n')], { type: 'text/markdown;charset=utf-8' });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `aetherclaw-chat-${Date.now()}.md`; a.click(); URL.revokeObjectURL(a.href);
+      toast('📥 对话记录已导出为 Markdown');
+    };
     $('#saveSettings').onclick = async () => {
       const body = { baseUrl: $('#cfgBaseUrl').value.trim(), model: $('#cfgModel').value.trim(), apiKey: $('#cfgApiKey').value.trim() };
       const r = await (await api('/api/config', { method: 'POST', body: JSON.stringify(body) })).json();
@@ -546,7 +663,7 @@
     const ta = $('#promptInput');
     ta.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
     ta.addEventListener('input', () => { ta.style.height = 'auto'; ta.style.height = Math.min(140, ta.scrollHeight) + 'px'; });
-    addEventListener('keydown', e => { if (e.key === 'Escape') closeSettings(); });
+    addEventListener('keydown', e => { if (e.key === 'Escape') { closeSettings(); closeSkillEditor(); } });
 
     // ---------- Boot ----------
     typewriter($('#welcome'), '👋 欢迎使用 **AetherClaw (灵爪)**！\n融合 **OpenClaw** 的 Windows/Linux 跨平台终端操控与 **Hermes** 的长期记忆 & 技能自我进化。\n- 无需编程：点击上方「⚡ 一键实操」立刻体验真实本地工具调用\n- 接入大模型：右上角「⚙️ API 设置」一键配置 DeepSeek / OpenAI / 通义千问 / Ollama');

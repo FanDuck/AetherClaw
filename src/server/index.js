@@ -209,7 +209,9 @@ function createServer(opts = {}) {
         };
         busy++;
         try {
-          const result = await agent.run(prompt, (step) => send('step', step));
+          const result = await agent.run(prompt, (step) => send('step', step), {
+            onToken: (delta) => send('token', { delta })
+          });
           send('done', {
             mode: result.mode,
             finalAnswer: result.finalAnswer,
@@ -224,6 +226,11 @@ function createServer(opts = {}) {
           res.end();
         }
         return;
+      }
+
+      if (req.method === 'DELETE' && pathname === '/api/conversation') {
+        memory.clearEpisodes();
+        return sendJson(res, 200, { success: true, episodes: [] });
       }
 
       if (req.method === 'POST' && pathname === '/api/memory') {
@@ -256,6 +263,32 @@ function createServer(opts = {}) {
           commandTemplate: { win32: body.win32Command || '', linux: body.linuxCommand || '' }
         });
         return sendJson(res, 200, { success: true, skill, skills: memory.listSkills() });
+      }
+
+      if (req.method === 'POST' && pathname === '/api/skills/import') {
+        const body = await parseBody(req);
+        const skill = memory.importSkillFromMarkdown(body.markdown || '');
+        return sendJson(res, 200, { success: true, skill, skills: memory.listSkills() });
+      }
+
+      if (req.method === 'GET' && /^\/api\/skills\/[^/]+\/md$/.test(pathname)) {
+        const id = decodeURIComponent(pathname.replace(/^\/api\/skills\/|\/md$/g, ''));
+        const exported = memory.getSkillMarkdown(id);
+        if (!exported) return sendJson(res, 404, { error: `Skill not found: ${id}` });
+        if (urlObj.searchParams.get('download') === '1') {
+          res.writeHead(200, securityHeaders({
+            'Content-Type': 'text/markdown; charset=utf-8',
+            'Content-Disposition': `attachment; filename="${exported.filename}"`
+          }));
+          return res.end(exported.markdown);
+        }
+        return sendJson(res, 200, exported);
+      }
+
+      if (req.method === 'DELETE' && pathname.startsWith('/api/skills/')) {
+        const id = decodeURIComponent(pathname.replace('/api/skills/', ''));
+        const removed = memory.deleteSkill(id);
+        return sendJson(res, 200, { success: removed, skills: memory.listSkills() });
       }
 
       return sendJson(res, 404, { error: `Not found: ${pathname}` });

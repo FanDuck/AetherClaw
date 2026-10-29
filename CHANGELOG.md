@@ -2,6 +2,20 @@
 
 本项目遵循 [语义化版本 2.0.0 (Semantic Versioning)](https://semver.org/lang/zh-CN/) 规范。
 
+## [v1.3.0] - 2026-10-29
+
+### 🚀 四大核心能力强化 (Major Enhancements)
+- **多轮连续对话上下文 & 会话管理**：
+  - 大模型模式自动注入最近 6 轮对话历史；免 Key 本地模式支持跨轮追问（如发送「`把刚才的结果保存为 report.md`」即可自动提取上一轮巡检/分析报告并写入本地文件）。
+  - Web 控制台新增 **「🧹 清空会话」**（`DELETE /api/conversation`）与 **「📥 导出对话 (.md)」** 按钮。
+- **大模型原生 Token 级 SSE 实时流式输出 (`consumeLLMStream`)**：
+  - 接入 DeepSeek / OpenAI / 通义千问 / Ollama 时，自动开启 `stream: true` 逐 Token 实时流式推送（`event: token`），并自动重组分段流式下发的 `tool_calls`，首字响应延迟大幅降低。
+- **Web 控制台技能可视化编辑器 & 一键导入/导出 `SKILL.md`**：
+  - 无需手动编辑代码文件，可在网页直接新建、编辑、删除自定义技能，或一键上传导入/下载导出开源标准的 `SKILL.md` 文件（`POST /api/skills/import`、`GET /api/skills/:id/md`、`DELETE /api/skills/:id`）。
+- **Docker 容器化一键部署套件 (`Dockerfile` + `docker-compose.yml`)**：
+  - 基于 `node:22-alpine`，内置 `bash`、`procps`、`coreutils`、`curl` 与 `/healthz` 健康检查，支持在 Linux 服务器或群晖/飞牛 NAS 上通过 `docker compose up -d` 安全隔离运行。
+- **测试与 CI 升级**：自动化测试套件扩充至 **20 项**，GitHub Actions 升级至最新 `v7` / `v3` 并优化 Windows 进程树超时回收速度。
+
 ## [v1.2.0] - 2026-10-29
 
 ### ✨ 核心功能与体验升级 (Enhancements)

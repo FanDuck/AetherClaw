@@ -243,6 +243,35 @@ class MemoryAndSkillEngine {
   }
 
   /**
+   * 获取最近 N 轮对话上下文（按时间正序排列，供多轮连续对话注入 LLM messages）
+   */
+  getRecentConversation(limitTurns = 6) {
+    const recent = (this.state.episodicHistory || []).slice(0, limitTurns).reverse();
+    const messages = [];
+    for (const ep of recent) {
+      if (ep.userPrompt) messages.push({ role: 'user', content: String(ep.userPrompt) });
+      if (ep.finalAnswer) messages.push({ role: 'assistant', content: String(ep.finalAnswer).slice(0, 4000) });
+    }
+    return messages;
+  }
+
+  /**
+   * 获取上一轮任务轨迹（用于免 Key 模式下追问"把刚才的结果保存为文件"等场景）
+   */
+  getLastEpisode() {
+    return (this.state.episodicHistory && this.state.episodicHistory[0]) || null;
+  }
+
+  /**
+   * 清空当前多轮对话情景历史
+   */
+  clearEpisodes() {
+    this.state.episodicHistory = [];
+    this.saveMemoryState();
+    return true;
+  }
+
+  /**
    * 记录一次技能被使用（累计调用次数，不改变版本号）
    */
   recordSkillUse(id) {
@@ -332,6 +361,77 @@ class MemoryAndSkillEngine {
         return true;
       }
       return (skill.triggerKeywords || []).some(kw => lower.includes(kw.toLowerCase()));
+    });
+  }
+
+  /**
+   * 导出指定技能的 SKILL.md 文本内容
+   */
+  getSkillMarkdown(id) {
+    const safeId = path.basename(String(id || '')).replace(/\.[^.]+$/, '');
+    const mdPath = path.join(SKILLS_DIR, `${safeId}.md`);
+    if (!fs.existsSync(mdPath)) return null;
+    return {
+      id: safeId,
+      filename: `${safeId}.md`,
+      markdown: fs.readFileSync(mdPath, 'utf8')
+    };
+  }
+
+  /**
+   * 删除自定义技能（内置技能默认保护）
+   */
+  deleteSkill(id, { allowBuiltin = false } = {}) {
+    const safeId = path.basename(String(id || '')).replace(/\.[^.]+$/, '');
+    if (!allowBuiltin && BUILTIN_SKILLS.some(b => b.id === safeId)) {
+      throw Object.assign(new Error(`Built-in skill "${safeId}" cannot be deleted`), { status: 400 });
+    }
+    const jsonPath = path.join(SKILLS_DIR, `${safeId}.json`);
+    const mdPath = path.join(SKILLS_DIR, `${safeId}.md`);
+    let removed = false;
+    if (fs.existsSync(jsonPath)) { fs.unlinkSync(jsonPath); removed = true; }
+    if (fs.existsSync(mdPath)) { fs.unlinkSync(mdPath); removed = true; }
+    return removed;
+  }
+
+  /**
+   * 从开源标准 SKILL.md 文本解析并导入技能
+   */
+  importSkillFromMarkdown(mdText) {
+    const text = String(mdText || '').trim();
+    if (!text) throw Object.assign(new Error('SKILL.md content cannot be empty'), { status: 400 });
+
+    const idMatch = /^id:\s*(.+)$/m.exec(text);
+    const nameMatch = /^name:\s*(.+)$/m.exec(text) || /^#\s+(.+)$/m.exec(text);
+    const descMatch = /^>\s*(.+)$/m.exec(text);
+
+    const kwSection = /##\s+Trigger Keywords[\s\S]*?\n([\s\S]*?)(?=\n##\s+|\s*$)/i.exec(text);
+    const triggerKeywords = kwSection
+      ? (kwSection[1].match(/[-*]\s+`?([^`\r\n]+)`?/g) || []).map(s => s.replace(/^[-*]\s+`?|`$/g, '').trim()).filter(Boolean)
+      : [];
+
+    const stepsSection = /##\s+Execution Steps[\s\S]*?\n([\s\S]*?)(?=\n##\s+|\s*$)/i.exec(text);
+    const steps = stepsSection
+      ? stepsSection[1].split(/\r?\n/).map(l => l.replace(/^\s*(?:\d+\.|[-*])\s*/, '').trim()).filter(Boolean)
+      : ['Execute skill workflow'];
+
+    const winMatch = /\*\*Windows[^*]*\*\*:\s*`([^`\r\n]+)`/i.exec(text);
+    const linuxMatch = /\*\*Linux[^*]*\*\*:\s*`([^`\r\n]+)`/i.exec(text);
+
+    const name = (nameMatch ? nameMatch[1] : 'Imported Skill').trim();
+    const id = (idMatch ? idMatch[1] : name).trim();
+    const description = (descMatch ? descMatch[1] : 'Skill imported from SKILL.md').trim();
+
+    return this.createOrUpdateSkill({
+      id,
+      name,
+      description,
+      triggerKeywords: triggerKeywords.length ? triggerKeywords : [name],
+      steps,
+      commandTemplate: {
+        win32: winMatch && winMatch[1] !== 'N/A' ? winMatch[1].trim() : '',
+        linux: linuxMatch && linuxMatch[1] !== 'N/A' ? linuxMatch[1].trim() : ''
+      }
     });
   }
 }

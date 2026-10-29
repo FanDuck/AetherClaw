@@ -10,7 +10,7 @@
 *An OpenClaw & Hermes-Inspired Cross-Platform (Windows & Linux) Self-Evolving Autonomous AI Agent Framework*
 
 [![CI Status](https://github.com/FanDuck/AetherClaw/actions/workflows/ci.yml/badge.svg)](https://github.com/FanDuck/AetherClaw/actions)
-[![Release Version](https://img.shields.io/badge/Release-v1.2.0-0284c7.svg)](https://github.com/FanDuck/AetherClaw/releases)
+[![Release Version](https://img.shields.io/badge/Release-v1.3.0-0284c7.svg)](https://github.com/FanDuck/AetherClaw/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/OS-Windows%20%7C%20Linux-a855f7.svg)](#)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18.0-339933.svg)](https://nodejs.org/)
@@ -202,8 +202,17 @@ npm run cli
 # 3. 单次指令执行模式（适合写进定时任务 Cron 或批处理脚本）
 node src/index.js --run "请对当前系统进行全面健康巡检"
 
-# 4. 运行跨平台自动化单元测试套件
+# 4. 运行跨平台自动化单元测试套件 (20 项全覆盖测试)
 npm test
+```
+
+#### 🐳 方式 C：Docker 容器化一键部署（适合 Linux 云服务器 / 群晖 / 飞牛 NAS）
+```bash
+# 一键后台启动并持久化挂载 ./data 与 ./skills 目录
+docker compose up -d
+
+# 查看启动日志与自动生成的访问令牌链接
+docker compose logs -f
 ```
 
 ---
@@ -283,13 +292,17 @@ created_at: 2026-10-29T00:00:00.000Z
 | 请求方法 & 路径 | 功能说明 | 请求体示例 (`JSON`) |
 | :--- | :--- | :--- |
 | `GET /api/status` | 获取系统环境、脱敏配置、记忆列表、技能列表与工具清单 | 无 |
-| `POST /api/chat/stream` | **SSE 实时流式**推送每一步思考/工具/观察，结束时推送 `done` 事件 | `{"prompt": "..."}` |
+| `POST /api/chat/stream` | **SSE 实时流式**推送每一步思考/工具/观察及大模型原生 `token` 增量，结束时推送 `done` 事件 | `{"prompt": "..."}` |
 | `GET /api/metrics` | 实时 CPU / 内存使用率 | 无 |
 | `POST /api/chat` | 向 Agent 发送指令并获取完整思考步骤 (`steps`) 与最终回复 (`finalAnswer`) | `{"prompt": "请对当前系统进行全面健康巡检"}` |
+| `DELETE /api/conversation` | 清空当前多轮对话情景历史上下文 | 无 |
 | `POST /api/config` | 动态更新大模型 `baseUrl`、`model`、`apiKey` 等配置 | `{"baseUrl": "https://api.deepseek.com/v1", "model": "deepseek-chat", "apiKey": "sk-..."}` |
 | `POST /api/memory` | 手动写入一条长期语义记忆 | `{"content": "生产环境日志位于 /var/log/app", "category": "ops"}` |
 | `DELETE /api/memory/:id` | 删除指定 ID 的长期语义记忆 | 无 |
-| `POST /api/skills` | 手动或通过外部程序注册/进化一个新技能 | `{"id": "log_clean", "name": "日志清理", "steps": ["..."]}` |
+| `POST /api/skills` | 可视化新建/编辑一个技能（自动同步生成 `.json` 与 `SKILL.md`） | `{"id": "port_scan", "name": "端口排查", "steps": ["..."]}` |
+| `POST /api/skills/import` | 一键导入开源标准 `SKILL.md` 文本并注册为本地技能 | `{"markdown": "---\nid: ...\n---"}` |
+| `GET /api/skills/:id/md` | 导出指定技能的 `SKILL.md` 文本内容（加 `?download=1` 直接下载文件） | 无 |
+| `DELETE /api/skills/:id` | 删除指定自定义技能（内置技能受保护） | 无 |
 
 ---
 

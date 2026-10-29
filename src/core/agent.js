@@ -57,8 +57,10 @@ class AetherClawAgent {
 
   /**
    * 主执行入口：处理用户指令，返回完整的思考轨迹（Steps）与最终回复
+   * 支持 onStep（步骤回调）与 options.onToken（大模型原生 Token 级流式输出回调）
    */
-  async run(userPrompt, onStep) {
+  async run(userPrompt, onStep, options = {}) {
+    const onToken = typeof options.onToken === 'function' ? options.onToken : null;
     const steps = [];
     const emit = (step) => {
       const enriched = { ...step, timestamp: new Date().toISOString() };
@@ -81,7 +83,7 @@ class AetherClawAgent {
     const isLocalLLM = /(^|\/\/)(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(cfg.baseUrl);
     if (cfg.hasApiKey || isLocalLLM) {
       try {
-        const finalAnswer = await this.runWithLLM(userPrompt, emit);
+        const finalAnswer = await this.runWithLLM(userPrompt, emit, onToken);
         memory.recordEpisode({ userPrompt, finalAnswer, steps });
         return { mode: 'llm', finalAnswer, steps };
       } catch (err) {
@@ -100,22 +102,95 @@ class AetherClawAgent {
   }
 
   /**
-   * 使用 OpenAI / DeepSeek / Qwen / Ollama 兼容接口执行 ReAct 循环
+   * 解析 OpenAI / DeepSeek / Qwen / Ollama 兼容的 SSE 流式响应，
+   * 实时触发 onToken(delta) 并自动拼接分段流式下发的 tool_calls。
    */
-  async runWithLLM(userPrompt, emit) {
+  async consumeLLMStream(response, onToken) {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let content = '';
+    const toolCallsByIndex = new Map();
+
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() || '';
+
+      for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line.startsWith('data:')) continue;
+        const payload = line.slice(5).trim();
+        if (!payload || payload === '[DONE]') continue;
+        let parsed;
+        try {
+          parsed = JSON.parse(payload);
+        } catch (_) {
+          continue;
+        }
+        const delta = parsed.choices && parsed.choices[0] && parsed.choices[0].delta;
+        if (!delta) continue;
+
+        if (typeof delta.content === 'string' && delta.content.length > 0) {
+          content += delta.content;
+          if (onToken) onToken(delta.content);
+        }
+
+        if (Array.isArray(delta.tool_calls)) {
+          for (const tc of delta.tool_calls) {
+            const idx = typeof tc.index === 'number' ? tc.index : 0;
+            if (!toolCallsByIndex.has(idx)) {
+              toolCallsByIndex.set(idx, {
+                id: tc.id || `call_${idx}_${Date.now()}`,
+                type: 'function',
+                function: { name: '', arguments: '' }
+              });
+            }
+            const entry = toolCallsByIndex.get(idx);
+            if (tc.id) entry.id = tc.id;
+            if (tc.function) {
+              if (tc.function.name) entry.function.name += tc.function.name;
+              if (tc.function.arguments) entry.function.arguments += tc.function.arguments;
+            }
+          }
+        }
+      }
+    }
+
+    const tool_calls = [...toolCallsByIndex.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([, v]) => v)
+      .filter(tc => tc.function.name);
+
+    return {
+      role: 'assistant',
+      content: content || null,
+      ...(tool_calls.length > 0 ? { tool_calls } : {})
+    };
+  }
+
+  /**
+   * 使用 OpenAI / DeepSeek / Qwen / Ollama 兼容接口执行 ReAct 循环（支持多轮上下文 + 原生 Token 流式输出）
+   */
+  async runWithLLM(userPrompt, emit, onToken = null) {
     const cfg = config.get();
+    const recentHistory = memory.getRecentConversation(6);
     const messages = [
       { role: 'system', content: this.buildSystemPrompt(userPrompt) },
+      ...recentHistory,
       { role: 'user', content: userPrompt }
     ];
     const tools = getToolSpecsForLLM({ autoEvolveSkills: cfg.autoEvolveSkills });
     const maxSteps = cfg.maxSteps || 8;
+    const useStream = Boolean(onToken);
 
     for (let stepIdx = 1; stepIdx <= maxSteps; stepIdx++) {
       emit({
         type: 'thought',
         title: `Step ${stepIdx}: 正在请求大模型 (${cfg.model}) 规划行动...`,
-        detail: `Endpoint: ${cfg.baseUrl}/chat/completions`
+        detail: `Endpoint: ${cfg.baseUrl}/chat/completions (${recentHistory.length / 2} 轮历史上下文)`
       });
 
       let response;
@@ -131,7 +206,8 @@ class AetherClawAgent {
             messages,
             tools,
             tool_choice: 'auto',
-            temperature: 0.3
+            temperature: 0.3,
+            ...(useStream ? { stream: true } : {})
           }),
           // 避免上游无响应时请求永久挂起
           signal: AbortSignal.timeout(cfg.llmTimeoutMs || 60000)
@@ -148,13 +224,22 @@ class AetherClawAgent {
         throw new Error(`HTTP ${response.status}: ${errText.slice(0, 300)}`);
       }
 
-      const data = await response.json();
-      const choice = data.choices && data.choices[0];
-      if (!choice || !choice.message) {
-        throw new Error('Invalid response from LLM provider');
+      let msg;
+      const contentType = (response.headers.get('content-type') || '').toLowerCase();
+      if (useStream && contentType.includes('text/event-stream') && response.body) {
+        msg = await this.consumeLLMStream(response, onToken);
+      } else {
+        const data = await response.json();
+        const choice = data.choices && data.choices[0];
+        if (!choice || !choice.message) {
+          throw new Error('Invalid response from LLM provider');
+        }
+        msg = choice.message;
+        if (onToken && msg.content && (!msg.tool_calls || msg.tool_calls.length === 0)) {
+          onToken(msg.content);
+        }
       }
 
-      const msg = choice.message;
       messages.push(msg);
 
       if (msg.content && msg.content.trim()) {
@@ -218,6 +303,37 @@ class AetherClawAgent {
       title: '本地智能体引擎规划 (Local Autonomous Planner)',
       detail: `当前处于「免 Key 本地实操模式」（可在右上角【API 设置】中接入 DeepSeek / OpenAI / Ollama 解锁完整自由对话）。正在分析指令意图并匹配本地跨平台工具...`
     });
+
+    // 0. 多轮对话追问意图: "把刚才的结果保存为 xxx.md" / "保存刚才的报告" / "save last result"
+    if (
+      (text.includes('刚才') || text.includes('上一条') || text.includes('上次') || lower.includes('last result') || lower.includes('previous')) &&
+      (text.includes('保存') || text.includes('写入') || text.includes('导出') || lower.includes('save') || lower.includes('write'))
+    ) {
+      const lastEp = memory.getLastEpisode();
+      if (!lastEp || !lastEp.finalAnswer) {
+        return `ℹ️ 当前会话还没有上一轮执行结果可供保存。请先运行一次巡检或分析指令，再追问「把刚才的结果保存为 report.md」！`;
+      }
+      const fileMatch = text.match(/([a-zA-Z0-9_.-]+\.(?:md|txt|json|log))/i);
+      const targetFile = fileMatch ? fileMatch[1] : 'report.md';
+      emit({
+        type: 'thought',
+        title: `多轮上下文追问识别：提取上一轮「${lastEp.userPrompt}」的输出并保存`,
+        detail: `目标文件: ${targetFile}`
+      });
+      emit({
+        type: 'tool_call',
+        tool: 'file_write',
+        title: `调用工具: file_write (保存上一轮结果至 ${targetFile})`,
+        args: { filePath: targetFile }
+      });
+      const res = await runTool('file_write', {
+        filePath: targetFile,
+        content: `# AetherClaw 任务报告\n\n- **原始指令**: ${lastEp.userPrompt}\n- **生成时间**: ${lastEp.timestamp}\n\n---\n\n${lastEp.finalAnswer}\n`
+      });
+      emit({ type: 'observation', tool: 'file_write', title: '文件保存结果', result: res });
+      if (res.error) return `❌ 保存失败：${res.error}`;
+      return `💾 **已根据多轮上下文将上一轮结果保存为文件！**\n\n- **文件路径**: \`${res.filePath}\`\n- **写入大小**: ${res.bytesWritten} bytes\n- **关联的上一轮指令**: 「${lastEp.userPrompt}」`;
+    }
 
     // 1. 记忆存储意图: "记住..." / "remember..."
     if (text.startsWith('记住') || lower.startsWith('remember ') || text.includes('请记住')) {

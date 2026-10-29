@@ -285,3 +285,78 @@ test('17. Server: multi-byte UTF-8 split across TCP chunks is decoded correctly;
     server.close();
   }
 });
+
+test('18. Multi-turn context: follow-up saves last result to file and conversation can be cleared', async () => {
+  await agent.run('分析当前目录的文件结构');
+  const recent = memory.getRecentConversation(2);
+  assert.ok(recent.length >= 2);
+  assert.equal(recent[recent.length - 1].role, 'assistant');
+
+  const outPath = path.join(TMP_HOME, 'saved_report.md');
+  const follow = await agent.run(`把刚才的结果保存为 ${path.basename(outPath)}`);
+  assert.match(follow.finalAnswer, /保存为文件/);
+  const fullSaved = path.resolve(process.cwd(), path.basename(outPath));
+  assert.ok(fs.existsSync(fullSaved));
+  fs.unlinkSync(fullSaved);
+
+  memory.clearEpisodes();
+  assert.equal(memory.getRecentConversation(5).length, 0);
+});
+
+test('19. Skill import/export/delete and built-in skill protection', () => {
+  const sampleMd = [
+    '---',
+    'id: imported_demo',
+    'name: 导入测试技能',
+    '---',
+    '# 导入测试技能',
+    '> 从 SKILL.md 导入的跨平台技能',
+    '## Trigger Keywords',
+    '- `导入测试`',
+    '- `demo_import`',
+    '## Execution Steps',
+    '1. 第一步检查',
+    '2. 第二步汇报',
+    '## Cross-Platform Command Templates',
+    '- **Windows (PowerShell)**: `Get-Date`',
+    '- **Linux (Bash)**: `date`'
+  ].join('\n');
+
+  const imported = memory.importSkillFromMarkdown(sampleMd);
+  assert.equal(imported.id, 'imported_demo');
+  assert.equal(imported.commandTemplate.win32, 'Get-Date');
+  assert.equal(imported.commandTemplate.linux, 'date');
+
+  const exported = memory.getSkillMarkdown('imported_demo');
+  assert.ok(exported && exported.markdown.includes('导入测试技能'));
+
+  assert.equal(memory.deleteSkill('imported_demo'), true);
+  assert.equal(memory.getSkillMarkdown('imported_demo'), null);
+
+  assert.throws(() => memory.deleteSkill('sys_health_check'), /Built-in skill/);
+});
+
+test('20. Native LLM SSE stream parser emits token deltas and reassembles tool_calls', async () => {
+  const sseChunks = [
+    'data: {"choices":[{"delta":{"content":"你好"}}]}\n\n',
+    'data: {"choices":[{"delta":{"content":"，世界！"}}]}\n\n',
+    'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"system_","arguments":"{\\"a\\":"}}]}}]}\n\n',
+    'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"name":"info","arguments":"1}"}}]}}]}\n\n',
+    'data: [DONE]\n\n'
+  ];
+  const stream = new ReadableStream({
+    start(controller) {
+      for (const chunk of sseChunks) {
+        controller.enqueue(new TextEncoder().encode(chunk));
+      }
+      controller.close();
+    }
+  });
+  const tokens = [];
+  const msg = await agent.consumeLLMStream({ body: stream }, (d) => tokens.push(d));
+  assert.equal(tokens.join(''), '你好，世界！');
+  assert.equal(msg.content, '你好，世界！');
+  assert.equal(msg.tool_calls.length, 1);
+  assert.equal(msg.tool_calls[0].function.name, 'system_info');
+  assert.equal(msg.tool_calls[0].function.arguments, '{"a":1}');
+});

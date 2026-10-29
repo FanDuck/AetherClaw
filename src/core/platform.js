@@ -144,6 +144,7 @@ class PlatformAdapter {
     try {
       if (this.isWindows) {
         exec(`taskkill /pid ${child.pid} /T /F`, () => {});
+        try { child.kill('SIGKILL'); } catch (_) {}
       } else {
         process.kill(-child.pid, 'SIGKILL');
       }
@@ -219,6 +220,7 @@ class PlatformAdapter {
       const timer = setTimeout(() => {
         timedOut = true;
         this._killTree(child);
+        setTimeout(() => finish(-1, 'Process terminated after timeout'), 300).unref();
       }, timeoutMs);
 
       const finish = (code, errMsg) => {
