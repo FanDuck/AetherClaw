@@ -182,6 +182,37 @@ function createServer(opts = {}) {
         return sendJson(res, 200, { success: true, config: config.update(body) });
       }
 
+      if (req.method === 'DELETE' && pathname === '/api/config/apikey') {
+        return sendJson(res, 200, { success: true, config: config.update({ clearApiKey: true }) });
+      }
+
+      if (req.method === 'POST' && pathname === '/api/config/test') {
+        const body = await parseBody(req);
+        const result = await config.testConnection(body);
+        return sendJson(res, 200, { ...result, config: config.getSafeConfig() });
+      }
+
+      if (req.method === 'POST' && pathname === '/api/config/models') {
+        const body = await parseBody(req);
+        const models = await config.fetchModels(body);
+        return sendJson(res, 200, { success: true, models });
+      }
+
+      if (req.method === 'POST' && pathname === '/api/config/profiles') {
+        const body = await parseBody(req);
+        return sendJson(res, 200, { success: true, config: config.saveProfile(body) });
+      }
+
+      if (req.method === 'POST' && /^\/api\/config\/profiles\/[^/]+\/activate$/.test(pathname)) {
+        const id = safeDecode(pathname.replace(/^\/api\/config\/profiles\/|\/activate$/g, ''));
+        return sendJson(res, 200, { success: true, config: config.activateProfile(id) });
+      }
+
+      if (req.method === 'DELETE' && pathname.startsWith('/api/config/profiles/')) {
+        const id = safeDecode(pathname.replace('/api/config/profiles/', ''));
+        return sendJson(res, 200, { success: true, config: config.deleteProfile(id) });
+      }
+
       // Plain JSON chat
       if (req.method === 'POST' && pathname === '/api/chat') {
         const body = await parseBody(req);

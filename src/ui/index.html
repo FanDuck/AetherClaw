@@ -228,8 +228,8 @@
         </div>
       </div>
       <div class="badge" id="osBadge"><span class="dot off"></span><span>连接中…</span></div>
-      <div class="badge" id="modeBadge"><span>模式检测中</span></div>
-      <button class="btn btn-primary" id="settingsBtn">⚙️ API 设置</button>
+      <div class="badge" id="modeBadge" style="cursor:pointer" title="点击配置或切换 API 模型"><span>模式检测中</span></div>
+      <button class="btn btn-primary" id="settingsBtn">⚙️ API 与安全设置</button>
     </div>
   </header>
 
@@ -252,6 +252,7 @@
       </div>
       <div class="composer">
         <textarea id="promptInput" rows="1" placeholder="输入指令，Enter 发送，Shift+Enter 换行（例：执行命令: Get-Date）"></textarea>
+        <button class="btn" id="stopBtn" style="display:none;border-color:rgba(248,113,113,.5);color:var(--red);">⏹️ 停止</button>
         <button class="btn btn-primary" id="sendBtn">发送 🚀</button>
       </div>
     </section>
@@ -287,22 +288,79 @@
   </div>
 
   <div class="modal-bg" id="settingsModal">
-    <div class="modal" role="dialog" aria-modal="true">
-      <h3 style="margin-bottom:8px;">⚙️ 大模型 API 零代码配置</h3>
-      <p style="font-size:12.5px;color:var(--muted);margin-bottom:14px;">配置仅保存在本机 <code>data/config.local.json</code>，已被 <code>.gitignore</code> 保护，不会上传 GitHub。</p>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">
-        <button class="chip" data-preset="https://api.deepseek.com/v1|deepseek-chat">DeepSeek</button>
-        <button class="chip" data-preset="https://api.openai.com/v1|gpt-4o-mini">OpenAI</button>
-        <button class="chip" data-preset="https://dashscope.aliyuncs.com/compatible-mode/v1|qwen-plus">通义千问</button>
-        <button class="chip" data-preset="https://api.moonshot.cn/v1|moonshot-v1-32k">Kimi</button>
-        <button class="chip" data-preset="http://127.0.0.1:11434/v1|qwen2.5:7b">Ollama 本地</button>
+    <div class="modal" role="dialog" aria-modal="true" style="width:650px;max-height:92vh;overflow-y:auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <h3>⚙️ 大模型 API 密钥管理与安全配置中心</h3>
+        <span id="activeKeyStatusBadge" class="badge" style="font-size:11.5px;">检测中</span>
       </div>
-      <div class="fg"><label>API 接口地址 (Base URL)</label><input id="cfgBaseUrl" placeholder="https://api.deepseek.com/v1" /></div>
-      <div class="fg"><label>模型名称 (Model)</label><input id="cfgModel" placeholder="deepseek-chat" /></div>
-      <div class="fg"><label>API Key（留空则保持不变 / 使用免 Key 本地模式）</label><input id="cfgApiKey" type="password" placeholder="sk-..." autocomplete="off" /></div>
-      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px;">
-        <button class="btn" id="cancelSettings">取消</button>
-        <button class="btn btn-primary" id="saveSettings">保存并生效</button>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:12px;">所有 API Key 仅以 <code>0600</code> 权限保存在本机 <code>data/config.local.json</code>，已受 <code>.gitignore</code> 与安全护栏双重保护，绝不上传 GitHub。</p>
+
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">⚡ 一键填入主流服务商预设：</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
+        <button class="chip" data-preset="https://api.deepseek.com/v1|deepseek-chat|DeepSeek V3">DeepSeek V3</button>
+        <button class="chip" data-preset="https://api.deepseek.com/v1|deepseek-reasoner|DeepSeek R1">DeepSeek R1</button>
+        <button class="chip" data-preset="https://api.openai.com/v1|gpt-4o-mini|OpenAI">OpenAI</button>
+        <button class="chip" data-preset="https://dashscope.aliyuncs.com/compatible-mode/v1|qwen-plus|通义千问">通义千问</button>
+        <button class="chip" data-preset="https://api.siliconflow.cn/v1|deepseek-ai/DeepSeek-V3|硅基流动">硅基流动</button>
+        <button class="chip" data-preset="https://open.bigmodel.cn/api/paas/v4|glm-4-flash|智谱 GLM">智谱 GLM</button>
+        <button class="chip" data-preset="https://api.moonshot.cn/v1|moonshot-v1-32k|Kimi">Kimi</button>
+        <button class="chip" data-preset="https://generativelanguage.googleapis.com/v1beta/openai|gemini-2.0-flash|Google Gemini">Gemini</button>
+        <button class="chip" data-preset="http://127.0.0.1:11434/v1|qwen2.5:7b|Ollama 本地(免Key)">Ollama 本地</button>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1.6fr;gap:10px;">
+        <div class="fg"><label>配置备注名称 (可选)</label><input id="cfgProfileName" placeholder="例：DeepSeek 主力密钥" /></div>
+        <div class="fg"><label>API 接口地址 (Base URL)</label><input id="cfgBaseUrl" placeholder="https://api.deepseek.com/v1" /></div>
+      </div>
+
+      <div class="fg">
+        <label style="display:flex;justify-content:space-between;align-items:center;">
+          <span>模型名称 (Model)</span>
+          <button type="button" class="btn btn-sm" id="fetchModelsBtn" style="padding:2px 8px;font-size:11px;">🔄 从接口拉取可用模型</button>
+        </label>
+        <input id="cfgModel" placeholder="deepseek-chat" />
+        <div id="fetchedModelsBox" style="display:none;margin-top:6px;gap:5px;flex-wrap:wrap;max-height:84px;overflow-y:auto;padding:6px;border-radius:8px;background:rgba(2,6,23,.55);border:1px solid var(--border);"></div>
+      </div>
+
+      <div class="fg">
+        <label style="display:flex;justify-content:space-between;align-items:center;">
+          <span>API Key（留空保持原密钥不变；本地 Ollama 免填）</span>
+          <div style="display:flex;gap:6px;">
+            <button type="button" class="btn btn-sm" id="toggleKeyVisBtn" style="padding:2px 8px;font-size:11px;">👁️ 显示/隐藏</button>
+            <button type="button" class="btn btn-sm" id="clearActiveKeyBtn" style="padding:2px 8px;font-size:11px;border-color:rgba(248,113,113,.45);color:var(--red);">🗑️ 删除当前激活 Key (切回免Key模式)</button>
+          </div>
+        </label>
+        <div style="display:flex;gap:8px;">
+          <input id="cfgApiKey" type="password" placeholder="sk-..." autocomplete="off" style="flex:1;" />
+          <button type="button" class="btn" id="testConnBtn" style="white-space:nowrap;border-color:rgba(56,189,248,.5);color:var(--accent);">🔌 测试连通性</button>
+          <button type="button" class="btn" id="addProfileBtn" style="white-space:nowrap;" title="将当前填写的接口与 Key 添加到下方多密钥库">➕ 存入密钥库</button>
+        </div>
+        <div id="connTestResult" style="display:none;margin-top:8px;padding:9px 12px;border-radius:9px;font-size:12.5px;line-height:1.5;"></div>
+      </div>
+
+      <!-- Saved API Keys Vault -->
+      <div style="margin:12px 0;padding:11px 12px;border-radius:11px;background:rgba(2,6,23,.5);border:1px solid var(--border);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span style="font-size:12.5px;font-weight:700;color:#e2e8f0;">🔑 已保存的 API 密钥库 (支持多账号一键切换 / 测速 / 删除)</span>
+          <span id="vaultCountLbl" style="font-size:11.5px;color:var(--muted);">0 个档案</span>
+        </div>
+        <div id="savedProfilesList" style="display:flex;flex-direction:column;gap:7px;max-height:155px;overflow-y:auto;"></div>
+      </div>
+
+      <!-- Agent Runtime & Security Controls -->
+      <div style="margin:12px 0;padding:11px 12px;border-radius:11px;background:rgba(2,6,23,.4);border:1px solid var(--border);">
+        <div style="font-size:12.5px;font-weight:700;color:#e2e8f0;margin-bottom:8px;">🛡️ OpenClaw 执行权限与推理护栏</div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;font-size:12.5px;color:var(--text);">
+          <label style="display:flex;align-items:center;gap:7px;cursor:pointer;"><input type="checkbox" id="cfgAllowShell" checked /> 允许执行终端命令 (shell_exec)</label>
+          <label style="display:flex;align-items:center;gap:7px;cursor:pointer;"><input type="checkbox" id="cfgAllowWrite" checked /> 允许写入本地文件 (file_write)</label>
+          <label style="display:flex;align-items:center;gap:7px;cursor:pointer;"><input type="checkbox" id="cfgAutoEvolve" checked /> 允许 AI 自动进化新技能 (SKILL.md)</label>
+          <label style="display:flex;align-items:center;gap:7px;">单次最大推理步数: <input type="number" id="cfgMaxSteps" min="1" max="20" value="8" style="width:64px;padding:3px 7px;border-radius:6px;border:1px solid var(--border);background:rgba(30,41,59,.8);color:#fff;" /></label>
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px;">
+        <button class="btn" id="cancelSettings">关闭</button>
+        <button class="btn btn-primary" id="saveSettings">💾 保存并立即生效</button>
       </div>
     </div>
   </div>
@@ -435,8 +493,11 @@
     function render() {
       const { system, config, skills = [], memories = [], tools = [], version } = state;
       if (!system) return;
+      const isLocalUrl = /(^|\/\/)(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(config.baseUrl || '');
       $('#osBadge').innerHTML = `<span class="dot"></span><span>${esc(system.osType)} · ${esc(system.shell)}</span>`;
-      $('#modeBadge').innerHTML = config.hasApiKey ? `<span>🟢 ${esc(config.model)}</span>` : `<span>⚡ 免 Key 本地模式</span>`;
+      $('#modeBadge').innerHTML = config.hasApiKey
+        ? `<span>🟢 ${esc(config.model)} (${esc(config.apiKeyMasked)})</span>`
+        : (isLocalUrl ? `<span>🟢 本地模型 ${esc(config.model)}</span>` : `<span>⚡ 免 Key 本地模式</span>`);
 
       const builtins = new Set(['sys_health_check', 'workspace_organizer']);
       $('#skillsList').innerHTML = skills.length ? skills.map((s, i) => `
@@ -468,6 +529,55 @@
       if (state.metrics) renderMetrics(state.metrics);
 
       $('#toolsList').innerHTML = tools.map(t => `<div class="card" style="padding:9px 12px"><div class="card-title" style="font-size:12.5px;color:var(--accent)">🔧 ${esc(t.name)}</div><div class="card-desc">${esc(t.description)}</div></div>`).join('');
+      renderSettingsVault();
+    }
+
+    function renderSettingsVault() {
+      const c = state.config || {};
+      const profiles = c.apiProfiles || [];
+      const badge = $('#activeKeyStatusBadge');
+      if (badge) {
+        badge.innerHTML = c.hasApiKey
+          ? `<span class="dot"></span><span>已配置 Key (${esc(c.apiKeyMasked)}) · ${esc(c.model)}</span>`
+          : `<span class="dot off" style="background:var(--amber)"></span><span>当前为免 Key 本地自主模式</span>`;
+      }
+      const clrBtn = $('#clearActiveKeyBtn');
+      if (clrBtn) {
+        clrBtn.style.display = c.hasApiKey ? 'inline-flex' : 'none';
+      }
+      const countLbl = $('#vaultCountLbl');
+      if (countLbl) countLbl.textContent = `${profiles.length} 个已存密钥档案`;
+      const listEl = $('#savedProfilesList');
+      if (!listEl) return;
+      if (!profiles.length) {
+        listEl.innerHTML = `<div style="font-size:12px;color:var(--muted);text-align:center;padding:12px 0;">暂无已存密钥档案。填写上方 API Key 后点击「➕ 存入密钥库」或「💾 保存并立即生效」即可保存多个服务商密钥并随时切换。</div>`;
+        return;
+      }
+      listEl.innerHTML = profiles.map(p => {
+        const isActive = c.activeProfileId === p.id || (c.hasApiKey && c.baseUrl === p.baseUrl && c.model === p.model && c.apiKeyMasked === p.apiKeyMasked);
+        const testTag = p.lastTestOk === true
+          ? `<span class="tag" style="background:rgba(52,211,153,.15);color:var(--green);margin:0;">🟢 连通 ${p.lastLatencyMs || '--'}ms</span>`
+          : (p.lastTestOk === false ? `<span class="tag" style="background:rgba(248,113,113,.15);color:var(--red);margin:0;">🔴 异常</span>` : '');
+        return `
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;background:rgba(15,23,42,.85);border:1px solid ${isActive ? 'rgba(56,189,248,.6)' : 'var(--border)'};">
+            <div style="min-width:0;flex:1;">
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                <span style="font-size:12.5px;font-weight:700;color:#f1f5f9;">${esc(p.name)}</span>
+                <span class="tag" style="margin:0;">${esc(p.model)}</span>
+                <span style="font-size:11px;color:var(--muted);font-family:Consolas,monospace;">Key: ${esc(p.apiKeyMasked)}</span>
+                ${testTag}
+              </div>
+              <div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(p.baseUrl)}</div>
+            </div>
+            <div style="display:flex;gap:5px;align-items:center;flex-shrink:0;">
+              ${isActive
+                ? `<span class="tag" style="background:rgba(56,189,248,.18);color:var(--accent);margin:0;padding:3px 8px;">✅ 当前使用</span>`
+                : `<button type="button" class="btn btn-sm" data-activate-profile="${esc(p.id)}" style="border-color:rgba(56,189,248,.4);color:var(--accent);">⚡ 切换</button>`}
+              <button type="button" class="btn btn-sm" data-test-profile="${esc(p.id)}" title="测试该密钥连通性">🔌 测速</button>
+              <button type="button" class="btn btn-sm" data-del-profile="${esc(p.id)}" title="从密钥库删除此 API Key" style="color:var(--red);">🗑️ 删除</button>
+            </div>
+          </div>`;
+      }).join('');
     }
 
     async function loadStatus() {
@@ -514,11 +624,14 @@
       })();
     }
 
+    let activeAbort = null;
     async function send(promptText) {
       const input = $('#promptInput'); const prompt = (promptText ?? input.value).trim();
       if (!prompt) return;
       if (sending) return toast('正在执行当前任务，请稍候…');
-      sending = true; $('#sendBtn').disabled = true; input.value = ''; input.style.height = 'auto';
+      sending = true; $('#sendBtn').disabled = true; $('#stopBtn').style.display = 'inline-flex';
+      input.value = ''; input.style.height = 'auto';
+      activeAbort = new AbortController();
 
       const u = document.createElement('div'); u.className = 'msg msg-user'; u.textContent = prompt; msgs.appendChild(u);
       const a = document.createElement('div'); a.className = 'msg msg-agent';
@@ -527,7 +640,7 @@
       const stepsBox = $('.steps', a), think = $('.thinking', a), ans = $('.answer', a), t0 = Date.now();
 
       try {
-        const res = await api('/api/chat/stream', { method: 'POST', body: JSON.stringify({ prompt }) });
+        const res = await api('/api/chat/stream', { method: 'POST', body: JSON.stringify({ prompt }), signal: activeAbort.signal });
         if (!res.ok || !res.body) throw new Error((await res.json().catch(() => ({}))).error || ('HTTP ' + res.status));
         const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '', final = null, streamed = '';
         for (;;) {
@@ -562,18 +675,75 @@
           }
         }
       } catch (err) {
-        think.remove(); ans.innerHTML = `<span style="color:var(--red)">执行出错：${esc(err.message)}</span>`; toast('执行失败', true);
-      } finally { sending = false; $('#sendBtn').disabled = false; scrollDown(); }
+        if (think.parentNode) think.remove();
+        ans.classList.remove('caret');
+        if (err && err.name === 'AbortError') {
+          ans.innerHTML = (ans.innerHTML ? ans.innerHTML + '<p style="color:var(--amber)">⏹️ 已手动停止生成</p>' : '<span style="color:var(--amber)">⏹️ 任务已手动终止</span>');
+          toast('⏹️ 已停止当前任务');
+        } else {
+          ans.innerHTML = `<span style="color:var(--red)">执行出错：${esc(err.message)}</span>`; toast('执行失败', true);
+        }
+      } finally {
+        sending = false; activeAbort = null;
+        $('#sendBtn').disabled = false; $('#stopBtn').style.display = 'none';
+        scrollDown();
+      }
     }
 
     // ---------- Settings & Skill Editor ----------
+    function showTestBanner(msg, ok, pending = false) {
+      const box = $('#connTestResult');
+      if (!box) return;
+      box.style.display = 'block';
+      box.style.background = pending ? 'rgba(56,189,248,.12)' : (ok ? 'rgba(52,211,153,.14)' : 'rgba(248,113,113,.14)');
+      box.style.border = `1px solid ${pending ? 'rgba(56,189,248,.45)' : (ok ? 'rgba(52,211,153,.5)' : 'rgba(248,113,113,.5)')}`;
+      box.style.color = pending ? '#bae6fd' : (ok ? '#a7f3d0' : '#fecaca');
+      box.textContent = msg;
+    }
+
     function openSettings() {
       const c = state.config || {};
-      $('#cfgBaseUrl').value = c.baseUrl || ''; $('#cfgModel').value = c.model || ''; $('#cfgApiKey').value = '';
-      $('#cfgApiKey').placeholder = c.apiKeyMasked ? `已保存 (${c.apiKeyMasked})，留空不修改` : 'sk-...';
+      $('#cfgProfileName').value = c.providerName || '';
+      $('#cfgBaseUrl').value = c.baseUrl || '';
+      $('#cfgModel').value = c.model || '';
+      $('#cfgApiKey').value = '';
+      $('#cfgApiKey').type = 'password';
+      $('#cfgApiKey').placeholder = c.apiKeyMasked ? `已保存密钥 (${c.apiKeyMasked})，留空则保持不变` : '请输入 API Key (如 sk-...)；本地 Ollama 免填';
+      $('#cfgAllowShell').checked = c.allowShellExec !== false;
+      $('#cfgAllowWrite').checked = c.allowFileWrite !== false;
+      $('#cfgAutoEvolve').checked = c.autoEvolveSkills !== false;
+      $('#cfgMaxSteps').value = c.maxSteps || 8;
+      $('#connTestResult').style.display = 'none';
+      $('#fetchedModelsBox').style.display = 'none';
+      renderSettingsVault();
       $('#settingsModal').classList.add('open');
     }
     const closeSettings = () => $('#settingsModal').classList.remove('open');
+
+    async function runConnectivityTest(opts = {}) {
+      const btn = $('#testConnBtn');
+      const prevTxt = btn.textContent;
+      btn.disabled = true; btn.textContent = '⏳ 测试中…';
+      showTestBanner('⏳ 正在向大模型接口发送握手请求并检测响应延迟…', false, true);
+      try {
+        const payload = opts.profileId
+          ? { profileId: opts.profileId }
+          : {
+              baseUrl: $('#cfgBaseUrl').value.trim(),
+              model: $('#cfgModel').value.trim(),
+              apiKey: $('#cfgApiKey').value.trim()
+            };
+        const r = await (await api('/api/config/test', { method: 'POST', body: JSON.stringify(payload) })).json();
+        if (r.config) { state.config = r.config; render(); }
+        showTestBanner(r.diagnosis || (r.ok ? '✅ 连接正常' : '❌ 连接失败'), Boolean(r.ok));
+        toast(r.ok ? `✅ API 连通成功 (${r.latencyMs} ms)` : '❌ API 连通测试未通过', !r.ok);
+      } catch (err) {
+        showTestBanner('❌ 请求测试接口失败：' + err.message, false);
+        toast('测试失败：' + err.message, true);
+      } finally {
+        btn.disabled = false; btn.textContent = prevTxt;
+      }
+    }
 
     function openSkillEditor(skill) {
       $('#skId').value = skill ? skill.id : '';
@@ -611,11 +781,107 @@
         state.skills = r.skills; render(); return toast('🗑️ 技能已删除');
       }
       const preset = t.closest('[data-preset]');
-      if (preset) { const [u, m] = preset.dataset.preset.split('|'); $('#cfgBaseUrl').value = u; $('#cfgModel').value = m; return; }
+      if (preset) {
+        const [u, m, name] = preset.dataset.preset.split('|');
+        $('#cfgBaseUrl').value = u; $('#cfgModel').value = m;
+        if (name) $('#cfgProfileName').value = name;
+        $('#connTestResult').style.display = 'none';
+        return;
+      }
+      const pickModel = t.closest('[data-pick-model]');
+      if (pickModel) {
+        $('#cfgModel').value = pickModel.dataset.pickModel;
+        toast('已选择模型：' + pickModel.dataset.pickModel);
+        return;
+      }
+      const actProf = t.closest('[data-activate-profile]');
+      if (actProf) {
+        const r = await (await api('/api/config/profiles/' + encodeURIComponent(actProf.dataset.activateProfile) + '/activate', { method: 'POST' })).json();
+        if (r.error) return toast(r.error, true);
+        state.config = r.config;
+        $('#cfgProfileName').value = r.config.providerName || '';
+        $('#cfgBaseUrl').value = r.config.baseUrl || '';
+        $('#cfgModel').value = r.config.model || '';
+        $('#cfgApiKey').value = '';
+        $('#cfgApiKey').placeholder = r.config.apiKeyMasked ? `已切换至 (${r.config.apiKeyMasked})` : 'sk-...';
+        render();
+        return toast('⚡ 已切换当前使用的 API 密钥');
+      }
+      const testProf = t.closest('[data-test-profile]');
+      if (testProf) {
+        return runConnectivityTest({ profileId: testProf.dataset.testProfile });
+      }
+      const delProf = t.closest('[data-del-profile]');
+      if (delProf) {
+        const r = await (await api('/api/config/profiles/' + encodeURIComponent(delProf.dataset.delProfile), { method: 'DELETE' })).json();
+        if (r.error) return toast(r.error, true);
+        state.config = r.config;
+        $('#cfgApiKey').placeholder = r.config.apiKeyMasked ? `已保存密钥 (${r.config.apiKeyMasked})，留空则保持不变` : '请输入 API Key (如 sk-...)';
+        render();
+        return toast('🗑️ 已从密钥库中删除该 API Key');
+      }
       if (t.id === 'settingsModal') closeSettings();
       if (t.id === 'skillModal') closeSkillEditor();
     });
-    $('#settingsBtn').onclick = openSettings; $('#cancelSettings').onclick = closeSettings;
+    $('#settingsBtn').onclick = openSettings;
+    $('#modeBadge').onclick = openSettings;
+    $('#cancelSettings').onclick = closeSettings;
+    $('#stopBtn').onclick = () => { if (activeAbort) activeAbort.abort(); };
+    $('#toggleKeyVisBtn').onclick = () => {
+      const inp = $('#cfgApiKey');
+      inp.type = inp.type === 'password' ? 'text' : 'password';
+    };
+    $('#clearActiveKeyBtn').onclick = async () => {
+      const r = await (await api('/api/config/apikey', { method: 'DELETE' })).json();
+      if (r.error) return toast(r.error, true);
+      state.config = r.config;
+      $('#cfgApiKey').value = '';
+      $('#cfgApiKey').placeholder = '已清除 API Key（当前处于免 Key 本地自主模式）';
+      showTestBanner('🗑️ 已删除当前激活的 API Key，系统已切回「⚡ 免 Key 本地自主模式」。', true);
+      render();
+      toast('🗑️ 已删除当前激活的 API Key');
+    };
+    $('#testConnBtn').onclick = () => runConnectivityTest();
+    $('#addProfileBtn').onclick = async () => {
+      const body = {
+        name: $('#cfgProfileName').value.trim(),
+        providerName: $('#cfgProfileName').value.trim(),
+        baseUrl: $('#cfgBaseUrl').value.trim(),
+        model: $('#cfgModel').value.trim(),
+        apiKey: $('#cfgApiKey').value.trim()
+      };
+      const r = await (await api('/api/config/profiles', { method: 'POST', body: JSON.stringify(body) })).json();
+      if (r.error) return toast(r.error, true);
+      state.config = r.config;
+      $('#cfgApiKey').value = '';
+      $('#cfgApiKey').placeholder = r.config.apiKeyMasked ? `已保存密钥 (${r.config.apiKeyMasked})，留空则保持不变` : 'sk-...';
+      render();
+      toast('🔑 已存入 API 密钥库并设为当前使用');
+    };
+    $('#fetchModelsBtn').onclick = async () => {
+      const btn = $('#fetchModelsBtn');
+      const box = $('#fetchedModelsBox');
+      btn.disabled = true; btn.textContent = '⏳ 拉取中…';
+      try {
+        const r = await (await api('/api/config/models', {
+          method: 'POST',
+          body: JSON.stringify({ baseUrl: $('#cfgBaseUrl').value.trim(), apiKey: $('#cfgApiKey').value.trim() })
+        })).json();
+        if (r.error) throw new Error(r.error);
+        const models = r.models || [];
+        if (!models.length) {
+          toast('该接口未返回模型列表，请手动填写模型名', true);
+          return;
+        }
+        box.style.display = 'flex';
+        box.innerHTML = models.map(m => `<button type="button" class="chip" data-pick-model="${esc(m)}" style="padding:3px 9px;font-size:11.5px;">${esc(m)}</button>`).join('');
+        toast(`🔄 已获取 ${models.length} 个可用模型，点击即可填入`);
+      } catch (err) {
+        toast('获取模型列表失败：' + err.message, true);
+      } finally {
+        btn.disabled = false; btn.textContent = '🔄 从接口拉取可用模型';
+      }
+    };
     $('#newSkillBtn').onclick = () => openSkillEditor(null); $('#cancelSkill').onclick = closeSkillEditor;
     $('#saveSkill').onclick = async () => {
       const name = $('#skName').value.trim();
@@ -653,8 +919,21 @@
       toast('📥 对话记录已导出为 Markdown');
     };
     $('#saveSettings').onclick = async () => {
-      const body = { baseUrl: $('#cfgBaseUrl').value.trim(), model: $('#cfgModel').value.trim(), apiKey: $('#cfgApiKey').value.trim() };
+      const apiKeyVal = $('#cfgApiKey').value.trim();
+      const body = {
+        providerName: $('#cfgProfileName').value.trim(),
+        profileName: $('#cfgProfileName').value.trim(),
+        baseUrl: $('#cfgBaseUrl').value.trim(),
+        model: $('#cfgModel').value.trim(),
+        apiKey: apiKeyVal,
+        saveToVault: Boolean(apiKeyVal),
+        allowShellExec: $('#cfgAllowShell').checked,
+        allowFileWrite: $('#cfgAllowWrite').checked,
+        autoEvolveSkills: $('#cfgAutoEvolve').checked,
+        maxSteps: Number($('#cfgMaxSteps').value) || 8
+      };
       const r = await (await api('/api/config', { method: 'POST', body: JSON.stringify(body) })).json();
+      if (r.error) return toast(r.error, true);
       state.config = r.config; closeSettings(); render(); toast('✅ 配置已保存并生效');
     };
     $('#addMemBtn').onclick = async () => {
@@ -670,7 +949,7 @@
     addEventListener('keydown', e => { if (e.key === 'Escape') { closeSettings(); closeSkillEditor(); } });
 
     // ---------- Boot ----------
-    typewriter($('#welcome'), '👋 欢迎使用 **AetherClaw (灵爪)**！\n融合 **OpenClaw** 的 Windows/Linux 跨平台终端操控与 **Hermes** 的长期记忆 & 技能自我进化。\n- 无需编程：点击上方「⚡ 一键实操」立刻体验真实本地工具调用\n- 接入大模型：右上角「⚙️ API 设置」一键配置 DeepSeek / OpenAI / 通义千问 / Ollama');
+    typewriter($('#welcome'), '👋 欢迎使用 **AetherClaw (灵爪)**！\n融合 **OpenClaw** 的 Windows/Linux 跨平台终端操控与 **Hermes** 的长期记忆 & 技能自我进化。\n- 无需编程：点击上方「⚡ 一键实操」立刻体验真实本地工具调用\n- 接入大模型：右上角「⚙️ API 与安全设置」支持 **API 连通性测试**、**多密钥添加/切换/删除** 与 **安全护栏开关**');
     loadStatus();
   })();
   </script>

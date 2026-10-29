@@ -387,3 +387,106 @@ test('21. Regression: clearing skill commands, Chinese skill ID non-collision, a
     server.close();
   }
 });
+
+test('22. API Key Vault (add/switch/delete/clear) & real-time API connectivity test + model list fetch', async () => {
+  // Mock OpenAI-compatible server for connectivity and models endpoint
+  const mockLLM = http.createServer(async (req, res) => {
+    const auth = req.headers.authorization || '';
+    if (req.url === '/v1/models') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ data: [{ id: 'deepseek-chat' }, { id: 'deepseek-reasoner' }] }));
+    }
+    if (req.url === '/v1/chat/completions') {
+      if (auth !== 'Bearer sk-valid-secret-key-123456') {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: { message: 'Invalid API key provided' } }));
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({
+        model: 'deepseek-chat',
+        choices: [{ message: { role: 'assistant', content: 'OK' } }]
+      }));
+    }
+    res.writeHead(404).end();
+  });
+  await new Promise((r) => mockLLM.listen(0, '127.0.0.1', r));
+  const llmPort = mockLLM.address().port;
+  const mockBaseUrl = `http://127.0.0.1:${llmPort}/v1`;
+
+  const server = createServer();
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const { port } = server.address();
+  const host = `127.0.0.1:${port}`;
+
+  try {
+    // 1) Save two API profiles into the vault
+    const p1Res = await request(port, {
+      method: 'POST', path: '/api/config/profiles',
+      headers: { Host: host, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: '主力有效Key', baseUrl: mockBaseUrl, model: 'deepseek-chat', apiKey: 'sk-valid-secret-key-123456' })
+    });
+    assert.equal(p1Res.status, 200);
+    const cfg1 = JSON.parse(p1Res.body).config;
+    assert.equal(cfg1.apiProfiles.length, 1);
+    assert.equal(cfg1.apiProfiles[0].apiKey, undefined); // never leaks plaintext key
+    assert.equal(cfg1.apiProfiles[0].apiKeyMasked, 'sk-v...3456');
+
+    const p2Res = await request(port, {
+      method: 'POST', path: '/api/config/profiles',
+      headers: { Host: host, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: '备用失效Key', baseUrl: mockBaseUrl, model: 'deepseek-chat', apiKey: 'sk-invalid-key-00000000' })
+    });
+    const cfg2 = JSON.parse(p2Res.body).config;
+    assert.equal(cfg2.apiProfiles.length, 2);
+    const profValidId = cfg2.apiProfiles.find(p => p.name === '主力有效Key').id;
+    const profInvalidId = cfg2.apiProfiles.find(p => p.name === '备用失效Key').id;
+
+    // 2) Test connectivity of the invalid profile -> ok: false, status: 401
+    const badTest = await request(port, {
+      method: 'POST', path: '/api/config/test',
+      headers: { Host: host, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profileId: profInvalidId })
+    });
+    const badData = JSON.parse(badTest.body);
+    assert.equal(badData.ok, false);
+    assert.equal(badData.status, 401);
+    assert.match(badData.diagnosis, /鉴权失败/);
+
+    // 3) Activate the valid profile and test connectivity -> ok: true, status: 200
+    const actRes = await request(port, {
+      method: 'POST', path: `/api/config/profiles/${profValidId}/activate`,
+      headers: { Host: host }
+    });
+    assert.equal(JSON.parse(actRes.body).config.activeProfileId, profValidId);
+
+    const okTest = await request(port, {
+      method: 'POST', path: '/api/config/test',
+      headers: { Host: host, 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    const okData = JSON.parse(okTest.body);
+    assert.equal(okData.ok, true);
+    assert.equal(okData.status, 200);
+    assert.match(okData.diagnosis, /连通成功/);
+
+    // 4) Fetch models list
+    const modelsRes = await request(port, {
+      method: 'POST', path: '/api/config/models',
+      headers: { Host: host, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ baseUrl: mockBaseUrl })
+    });
+    const modelsData = JSON.parse(modelsRes.body);
+    assert.deepEqual(modelsData.models, ['deepseek-chat', 'deepseek-reasoner']);
+
+    // 5) Delete profiles and clear active API key
+    await request(port, { method: 'DELETE', path: `/api/config/profiles/${profInvalidId}`, headers: { Host: host } });
+    await request(port, { method: 'DELETE', path: `/api/config/profiles/${profValidId}`, headers: { Host: host } });
+    const clrRes = await request(port, { method: 'DELETE', path: '/api/config/apikey', headers: { Host: host } });
+    const finalCfg = JSON.parse(clrRes.body).config;
+    assert.equal(finalCfg.hasApiKey, false);
+    assert.equal(finalCfg.apiProfiles.length, 0);
+  } finally {
+    server.close();
+    mockLLM.close();
+  }
+});

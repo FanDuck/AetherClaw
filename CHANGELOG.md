@@ -2,6 +2,22 @@
 
 本项目遵循 [语义化版本 2.0.0 (Semantic Versioning)](https://semver.org/lang/zh-CN/) 规范。
 
+## [v1.4.0] - 2026-10-29
+
+### 🔑 大模型 API 多密钥管理中心与连通性诊断 (API Key Vault & Live Diagnostics)
+- **实时 API 连通性测试与故障中文诊断 (`POST /api/config/test`)**：
+  - 在「⚙️ API 与安全设置」弹窗中一键测试当前输入或已存密钥的连通性，实时测算响应延迟 (`latencyMs`) 并返回中文诊断报告（自动识别 `401/403` 密钥无效、`404` 路径或模型名错误、`429/402` 余额或并发受限、网络超时等）。
+- **多 API Key 密钥库（添加 / 切换 / 测速 / 删除）**：
+  - 支持将多个不同服务商或账号的 API Key 存入本地加密权限 (`0600`) 的密钥保险箱 (`apiProfiles`)，所有接口响应均自动脱敏（仅展示 `sk-xxxx...xxxx`），支持在网页上一键切换当前生效密钥、单独测速或随时删除。
+  - 新增 **「🗑️ 删除当前激活 Key (切回免Key模式)」**（`DELETE /api/config/apikey`）与密码框 **「👁️ 显示/隐藏」** 切换按钮。
+- **一键从接口拉取可用模型列表 (`POST /api/config/models`)**：
+  - 自动请求 `<baseUrl>/models` 并将可用模型渲染为可点击芯片，无需手敲复杂的模型名称。
+- **9 大主流服务商预设 & 可视化安全护栏开关**：
+  - 内置 DeepSeek V3、DeepSeek R1、OpenAI、通义千问、硅基流动 (SiliconFlow)、智谱 GLM、Kimi、Google Gemini、Ollama 本地（免 Key）一键预设。
+  - 在设置弹窗中新增 OpenClaw 执行权限开关（终端执行 `allowShellExec`、文件写入 `allowFileWrite`、技能进化 `autoEvolveSkills`、最大推理步数 `maxSteps`）。
+- **任务中途一键停止 (`⏹️ 停止`)**：
+  - 发送区新增流式任务实时中断按钮，可随时取消正在生成或规划的任务。
+
 ## [v1.3.0] - 2026-10-29
 
 ### 🚀 四大核心能力强化 (Major Enhancements)

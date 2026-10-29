@@ -66,14 +66,32 @@ print("\n最终回复:\n", data["finalAnswer"])
 
 ---
 
-## 3. 动态更新大模型 API 配置
+## 3. 动态更新大模型 API 配置与密钥库管理
 
+### 3.1 更新当前配置
 - **请求路径**: `POST /api/config`
 - **请求体参数**:
   - `baseUrl` (string): 模型接口地址（如 `https://api.deepseek.com/v1`）
   - `model` (string): 模型名称（如 `deepseek-chat`）
   - `apiKey` (string): API 密钥
-  - `allowShellExec` (boolean, 可选): 是否允许执行终端命令
+  - `saveToVault` (boolean, 可选): 是否同步存入多密钥库 (`apiProfiles`)
+  - `allowShellExec` / `allowFileWrite` / `autoEvolveSkills` (boolean, 可选): 安全护栏开关
+  - `maxSteps` (number, 可选): 单次任务最大推理步数 (`1 ~ 20`)
+
+### 3.2 一键测试 API 连通性与延迟诊断
+- **请求路径**: `POST /api/config/test`
+- **请求体参数**: `{ "baseUrl": "...", "model": "...", "apiKey": "..." }` 或 `{ "profileId": "prof_xxxx" }`
+- **返回字段**: `{ "ok": true, "status": 200, "latencyMs": 312, "model": "deepseek-chat", "reply": "OK", "diagnosis": "✅ 连通成功！..." }`
+
+### 3.3 从接口拉取可用模型列表
+- **请求路径**: `POST /api/config/models`
+- **返回字段**: `{ "success": true, "models": ["deepseek-chat", "deepseek-reasoner"] }`
+
+### 3.4 多 API Key 密钥库（添加 / 切换 / 删除 / 清除当前 Key）
+- **添加或更新密钥档案**: `POST /api/config/profiles`（参数：`name`, `baseUrl`, `model`, `apiKey`）
+- **一键切换激活某个密钥档案**: `POST /api/config/profiles/:id/activate`
+- **删除某个已存密钥档案**: `DELETE /api/config/profiles/:id`
+- **清除当前激活的 API Key（切回免 Key 本地模式）**: `DELETE /api/config/apikey`
 
 ---
 
