@@ -187,12 +187,59 @@ class PlatformAdapter {
       '--cpus=1',
       '--pids-limit=64',
       '--user', '65534:65534',
-      '-v', `${cwd}:/workspace:${mountMode}`,
+      // 使用 --mount 而非 -v：Windows 盘符路径 (E:\\xx) 中的冒号不会被误解析为分隔符
+      '--mount', `type=bind,source=${cwd},target=/workspace${mountMode === 'ro' ? ',readonly' : ''}`,
       '-w', '/workspace',
       image,
       'sh', '-c', command
     ];
     return { containerName, args, mode, image };
+  }
+
+  /**
+   * 命令真正的执行目标：沙箱模式下命令运行在 Linux 容器 (sh) 中，
+   * 即使宿主机是 Windows，也必须生成 Linux 命令，否则 PowerShell 命令会在容器内全部失败。
+   */
+  getExecTarget(sandboxMode = 'host') {
+    const sandboxed = sandboxMode === 'docker' || sandboxMode === 'gvisor';
+    const isWindows = sandboxed ? false : this.isWindows;
+    return {
+      sandboxed,
+      isWindows,
+      osType: sandboxed ? `Linux container (${sandboxMode === 'gvisor' ? 'gVisor runsc' : 'Docker'})` : (this.isWindows ? 'Windows' : (this.isLinux ? 'Linux' : this.platform)),
+      shell: sandboxed ? 'sh (Alpine / BusyBox)' : this.getDefaultShell(),
+      shellName: isWindows ? 'PowerShell' : (sandboxed ? 'sh' : 'Bash')
+    };
+  }
+
+  /**
+   * 探测沙箱运行时是否可用（docker 命令、守护进程、gVisor runsc 运行时、沙箱镜像是否已存在）。
+   * 返回 { ok, mode, message }，用于保存配置时给出明确提示，而不是等到执行命令时才失败。
+   */
+  probeSandbox(mode = 'host', image = 'alpine:3.20') {
+    if (mode !== 'docker' && mode !== 'gvisor') {
+      return Promise.resolve({ ok: true, mode: 'host', message: '宿主机受控模式（危险命令护栏生效）' });
+    }
+    const run = (cmd) => new Promise((resolve) => {
+      exec(cmd, { timeout: 8000, windowsHide: true }, (err, stdout) => resolve({ err, out: String(stdout || '').trim() }));
+    });
+    return (async () => {
+      if (!/^[a-zA-Z0-9._/:@-]{2,120}$/.test(String(image))) {
+        return { ok: false, mode, message: `沙箱镜像名不合法: ${image}` };
+      }
+      const info = await run('docker info --format "{{json .Runtimes}}"');
+      if (info.err) {
+        return { ok: false, mode, message: '未检测到可用的 Docker：请先安装并启动 Docker Desktop / Docker Engine，否则沙箱模式下所有终端命令都会失败。' };
+      }
+      if (mode === 'gvisor' && !/runsc/.test(info.out)) {
+        return { ok: false, mode, message: 'Docker 中未注册 gVisor 运行时 (runsc)：请参考 https://gvisor.dev/docs/user_guide/install/ 安装后执行 `sudo runsc install` 并重启 Docker。' };
+      }
+      const img = await run(`docker image inspect ${image} --format "{{.Id}}"`);
+      if (img.err) {
+        return { ok: true, mode, message: `沙箱可用，但本地尚无镜像 ${image}：首次执行命令会自动拉取（可能超过命令超时），建议先手动执行 docker pull ${image}。` };
+      }
+      return { ok: true, mode, message: `沙箱可用（${mode === 'gvisor' ? 'gVisor runsc' : 'Docker'}，镜像 ${image}）` };
+    })();
   }
 
   /**
@@ -299,7 +346,12 @@ class PlatformAdapter {
         });
       };
 
-      child.on('error', (err) => finish(-1, err.message));
+      child.on('error', (err) => {
+        if (sandboxInfo && err && err.code === 'ENOENT') {
+          return finish(-1, '[Sandbox] 未找到 docker 命令：请安装并启动 Docker，或在「API 与安全设置」中把沙箱模式切回「宿主机受控模式」。');
+        }
+        finish(-1, err.message);
+      });
       child.on('close', (code) => finish(code));
     });
   }

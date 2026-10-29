@@ -24,6 +24,7 @@ class AetherClawAgent {
    */
   buildSystemPrompt(userPrompt) {
     const sys = platform.getSystemSummary();
+    const target = platform.getExecTarget(config.get().sandboxMode);
     const relevantMemories = memory.searchMemories(userPrompt, 5);
     const matchedSkills = memory.matchSkills(userPrompt);
     const allSkills = memory.listSkills();
@@ -36,6 +37,9 @@ class AetherClawAgent {
       `- Default Shell: ${sys.shell}`,
       `- CPU & Memory: ${sys.cpuModel} (${sys.cpuCores} cores), ${sys.memory}`,
       `- Working Directory: ${sys.cwd}`,
+      target.sandboxed
+        ? `- ⚠️ shell_exec runs inside an isolated ${target.osType} with POSIX \`sh\` (no network by default, read-only root FS, workspace mounted at /workspace). ALWAYS write Linux/sh commands, NEVER PowerShell.`
+        : `- shell_exec runs directly on the host with ${target.shell}.`,
       ``,
       `## Relevant Long-Term Memories (Hermes 长期记忆)`,
       relevantMemories.length > 0
@@ -44,11 +48,11 @@ class AetherClawAgent {
       ``,
       `## Matched Reusable Skills (已匹配的技能模板)`,
       matchedSkills.length > 0
-        ? matchedSkills.map(s => `- **${s.name}** (\`${s.id}\`): ${s.description}\n  Steps: ${(s.steps || []).join(' -> ')}\n  Recommended Command: ${sys.isWindows ? (s.commandTemplate?.win32 || 'N/A') : (s.commandTemplate?.linux || 'N/A')}`).join('\n')
+        ? matchedSkills.map(s => `- **${s.name}** (\`${s.id}\`): ${s.description}\n  Steps: ${(s.steps || []).join(' -> ')}\n  Recommended Command: ${target.isWindows ? (s.commandTemplate?.win32 || 'N/A') : (s.commandTemplate?.linux || 'N/A')}`).join('\n')
         : `- Available Skills in Library: ${allSkills.map(s => s.name).join(', ')}`,
       ``,
       `## Behavioral Guidelines`,
-      `1. Always adapt shell commands to the current OS (${sys.osType} -> ${sys.shell}).`,
+      `1. Always adapt shell commands to the actual execution target (${target.osType} -> ${target.shell}).`,
       `2. When discovering important user preferences or environment facts, call \`memory_store\` to remember them.`,
       `3. When you solve a novel multi-step task or the user asks you to learn/save a skill, call \`skill_create\` to crystallize the workflow into a reusable skill.`,
       `4. Respond clearly in the language used by the user (default to Chinese if the user writes in Chinese).`
@@ -463,14 +467,15 @@ class AetherClawAgent {
       if (!skill) {
         return `❌ 没有找到名为「${skillRun[1].trim()}」的技能。可以在右侧「技能库」面板查看现有技能。`;
       }
-      const command = platform.isWindows ? skill.commandTemplate?.win32 : skill.commandTemplate?.linux;
+      const target = platform.getExecTarget(config.get().sandboxMode);
+      const command = target.isWindows ? skill.commandTemplate?.win32 : skill.commandTemplate?.linux;
       if (!command) {
-        return `⚠️ 技能「${skill.name}」没有适用于当前系统（${platform.isWindows ? 'Windows' : 'Linux'}）的命令模板。\n\n执行步骤参考：\n${(skill.steps || []).map(s => `- ${s}`).join('\n')}`;
+        return `⚠️ 技能「${skill.name}」没有适用于当前执行环境（${target.osType}）的命令模板。\n\n执行步骤参考：\n${(skill.steps || []).map(s => `- ${s}`).join('\n')}`;
       }
       emit({
         type: 'tool_call',
         tool: 'shell_exec',
-        title: `执行技能「${skill.name}」的 ${platform.isWindows ? 'PowerShell' : 'Bash'} 命令模板`,
+        title: `执行技能「${skill.name}」的 ${target.shellName} 命令模板`,
         args: { command }
       });
       const res = await runTool('shell_exec', { command });
@@ -543,14 +548,15 @@ class AetherClawAgent {
     const sysInfo = await runTool('system_info', {});
     emit({ type: 'observation', tool: 'system_info', title: '系统指标读取完成', result: sysInfo });
 
-    const diskCmd = platform.isWindows
+    const execTarget = platform.getExecTarget(config.get().sandboxMode);
+    const diskCmd = execTarget.isWindows
       ? 'Get-PSDrive -PSProvider FileSystem | Select-Object Name, @{Name="Used(GB)";Expression={[math]::round($_.Used/1GB,2)}}, @{Name="Free(GB)";Expression={[math]::round($_.Free/1GB,2)}} | Format-Table -AutoSize'
       : 'df -h /';
 
     emit({
       type: 'tool_call',
       tool: 'shell_exec',
-      title: `调用工具: shell_exec (自适应 ${sysInfo.osType} 磁盘巡检命令)`,
+      title: `调用工具: shell_exec (自适应 ${execTarget.osType} 磁盘巡检命令)`,
       args: { command: diskCmd }
     });
     const diskRes = await runTool('shell_exec', { command: diskCmd });

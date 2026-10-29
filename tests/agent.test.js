@@ -523,7 +523,12 @@ test('24. Enterprise hardening: Docker/gVisor sandbox args, Header Bearer Token 
   assert.ok(dockerSbx.args.includes('--security-opt=no-new-privileges'));
   assert.ok(dockerSbx.args.includes('--read-only'));
   assert.ok(dockerSbx.args.includes('--network=none'));
-  assert.ok(dockerSbx.args.some(a => a.endsWith(':/workspace:ro')));
+  assert.ok(dockerSbx.args.includes('--mount'));
+  assert.ok(dockerSbx.args.some(a => a.includes('target=/workspace,readonly')));
+
+  const execTarget = platform.getExecTarget('docker');
+  assert.equal(execTarget.isWindows, false);
+  assert.equal(execTarget.sandboxed, true);
 
   const gvisorSbx = platform.buildSandboxArgs('uname -a', { sandboxMode: 'gvisor', sandboxMemoryMB: 512 });
   assert.ok(gvisorSbx.args.includes('--runtime=runsc'));

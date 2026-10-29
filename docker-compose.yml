@@ -30,6 +30,9 @@ services:
       - ALLOW_SHELL_EXEC=${ALLOW_SHELL_EXEC:-true}
       - ALLOW_FILE_WRITE=${ALLOW_FILE_WRITE:-true}
       - AUTO_EVOLVE_SKILLS=${AUTO_EVOLVE_SKILLS:-true}
+      # 注意：AetherClaw 本身已运行在加固容器中，容器内没有 docker CLI 与 docker.sock，
+      # 因此这里请保持 host（命令在本容器内执行，已受 cap_drop/read_only 隔离）。
+      # docker / gvisor 沙箱模式适用于直接在宿主机上用 node / systemd / PM2 运行 AetherClaw 的场景。
       - SANDBOX_MODE=${SANDBOX_MODE:-host}
     volumes:
       - ./data:/app/data

@@ -205,7 +205,12 @@ function createServer(opts = {}) {
 
       if (req.method === 'POST' && pathname === '/api/config') {
         const body = await parseBody(req);
-        return sendJson(res, 200, { success: true, config: config.update(body) });
+        const updated = config.update(body);
+        // 切换到 Docker / gVisor 沙箱时立即探测运行时，避免用户保存后所有命令静默失败
+        const sandboxStatus = (typeof body.sandboxMode === 'string' && body.sandboxMode !== 'host')
+          ? await platform.probeSandbox(updated.sandboxMode, updated.sandboxImage)
+          : undefined;
+        return sendJson(res, 200, { success: true, config: updated, ...(sandboxStatus ? { sandboxStatus } : {}) });
       }
 
       if (req.method === 'DELETE' && pathname === '/api/config/apikey') {
