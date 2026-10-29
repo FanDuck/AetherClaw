@@ -10,13 +10,18 @@ permissions:
   contents: read
   packages: write
 
+# 串行化镜像推送，防止同一提交同时推送分支与 Tag 时在 GHCR 产生并发冲突
+concurrency:
+  group: ghcr-publish
+  cancel-in-progress: false
+
 jobs:
   docker-ghcr:
     name: Build & Push Multi-Arch Image to GHCR
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up QEMU (multi-arch support)
         uses: docker/setup-qemu-action@v3

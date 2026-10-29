@@ -573,3 +573,21 @@ test('24. Enterprise hardening: Docker/gVisor sandbox args, Header Bearer Token 
   assert.ok(fs.existsSync(path.join(__dirname, '..', 'deploy', 'nginx.conf')));
   assert.ok(fs.existsSync(path.join(__dirname, '..', '.github', 'workflows', 'docker-publish.yml')));
 });
+
+test('25. Runtime enforcement of autoEvolveSkills=false and full 9-tool coverage in zero-key local engine', async () => {
+  // 1) Runtime check in skill_create.execute when autoEvolveSkills=false
+  try {
+    config.update({ autoEvolveSkills: false });
+    const blocked = await runTool('skill_create', { id: 'nope', name: 'nope', description: 'nope', steps: ['1'] });
+    assert.match(blocked.error, /disabled/);
+  } finally {
+    config.update({ autoEvolveSkills: true });
+  }
+
+  // 2) Local autonomous engine supports file_read and memory_recall intents directly
+  const readRes = await agent.run('读取文件: package.json');
+  assert.match(readRes.finalAnswer, /aetherclaw/);
+
+  const recallRes = await agent.run('查看记忆');
+  assert.match(recallRes.finalAnswer, /Hermes 长期记忆检索结果/);
+});

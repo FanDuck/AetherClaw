@@ -8,6 +8,7 @@ const path = require('path');
 const platform = require('../core/platform');
 const memory = require('../core/memory');
 const config = require('../core/config');
+const { DATA_DIR } = require('../core/paths');
 
 const MAX_FILE_WRITE_BYTES = 2 * 1024 * 1024;
 const MAX_FETCH_BYTES = 512 * 1024;
@@ -203,18 +204,32 @@ const TOOLS = {
       if (bytes > MAX_FILE_WRITE_BYTES) {
         return { error: `Content too large (${bytes} bytes, max ${MAX_FILE_WRITE_BYTES}).` };
       }
-      const target = path.resolve(process.cwd(), filePath);
+      let target = path.resolve(process.cwd(), filePath);
       if (isProtectedPath(target)) {
         return { error: `Access denied: ${path.basename(target)} is protected.` };
       }
       if (fs.existsSync(target) && fs.statSync(target).isDirectory()) {
         return { error: `Target is a directory: ${target}` };
       }
-      const parent = path.dirname(target);
-      if (!fs.existsSync(parent)) {
-        fs.mkdirSync(parent, { recursive: true });
+      try {
+        const parent = path.dirname(target);
+        if (!fs.existsSync(parent)) {
+          fs.mkdirSync(parent, { recursive: true });
+        }
+        fs.writeFileSync(target, text, 'utf8');
+      } catch (err) {
+        // 只读根文件系统容器 (--read-only) 下若写入相对路径触发 EROFS，自动回退写入可持久化的 DATA_DIR
+        if (err && err.code === 'EROFS' && !path.isAbsolute(filePath)) {
+          target = path.resolve(DATA_DIR, filePath);
+          if (isProtectedPath(target)) {
+            return { error: `Access denied: ${path.basename(target)} is protected.` };
+          }
+          fs.mkdirSync(path.dirname(target), { recursive: true });
+          fs.writeFileSync(target, text, 'utf8');
+        } else {
+          throw err;
+        }
       }
-      fs.writeFileSync(target, text, 'utf8');
       return {
         success: true,
         filePath: target,
@@ -376,6 +391,9 @@ const TOOLS = {
       required: ['id', 'name', 'description', 'steps']
     },
     async execute({ id, name, description, triggerKeywords = [], steps = [], win32Command = '', linuxCommand = '' }) {
+      if (!config.get().autoEvolveSkills) {
+        return { error: 'Skill self-evolution (skill_create) is currently disabled in AetherClaw settings.' };
+      }
       const created = memory.createOrUpdateSkill({
         id,
         name,

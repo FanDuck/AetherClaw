@@ -419,9 +419,9 @@
 
     // ---------- Header Bearer Token (RFC 6750) ----------
     const getToken = () => sessionStorage.getItem('ac_token') || '';
-    const api = (path, opts = {}) => {
+    const api = async (path, opts = {}) => {
       const tk = getToken();
-      return fetch(path, {
+      const res = await fetch(path, {
         ...opts,
         headers: {
           'Content-Type': 'application/json',
@@ -429,6 +429,10 @@
           ...(opts.headers || {})
         }
       });
+      if (res.status === 401) {
+        $('#tokenModal').classList.add('open');
+      }
+      return res;
     };
 
     // ---------- Safe text / markdown-lite ----------
@@ -549,9 +553,10 @@
           <div class="card-desc" style="color:var(--text)">${esc(m.content)}</div>
         </div>`).join('') : '<div class="empty">记忆库为空</div>';
 
+      const sbxLabel = { host: '宿主机护栏 (Host)', docker: '受限 Docker 容器', gvisor: 'gVisor (runsc) 内核沙箱' }[config.sandboxMode || 'host'] || 'Host';
       $('#sysCard').innerHTML = `
         <div class="card-title" style="margin-bottom:8px">🖥️ 主机实时环境 <span style="color:var(--muted);font-weight:400">v${esc(version)}</span></div>
-        <div class="card-desc">• 系统: ${esc(system.osType)} (${esc(system.release)} / ${esc(system.arch)})<br>• 终端: ${esc(system.shell)}<br>• CPU: ${esc(system.cpuModel)} (${esc(system.cpuCores)} 核)<br>• Node: ${esc(system.nodeVersion)}</div>
+        <div class="card-desc">• 系统: ${esc(system.osType)} (${esc(system.release)} / ${esc(system.arch)})<br>• 终端: ${esc(system.shell)}<br>• 沙箱隔离: <strong style="color:var(--accent)">${esc(sbxLabel)}</strong><br>• CPU: ${esc(system.cpuModel)} (${esc(system.cpuCores)} 核)<br>• Node: ${esc(system.nodeVersion)}</div>
         <div class="meter"><div class="lbl"><span>CPU</span><span id="cpuLbl">--</span></div><div class="bar"><i id="cpuBar"></i></div></div>
         <div class="meter"><div class="lbl"><span>内存</span><span id="memLbl">--</span></div><div class="bar"><i id="memBar"></i></div></div>`;
       if (state.metrics) renderMetrics(state.metrics);

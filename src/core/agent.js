@@ -399,8 +399,58 @@ class AetherClawAgent {
         args
       });
       const res = await runTool('skill_create', args);
-      emit({ type: 'observation', tool: 'skill_create', title: '技能文件已生成', result: res });
+      emit({ type: 'observation', tool: 'skill_create', title: '技能进化结果', result: res });
+      if (res.error) return `❌ 技能创建失败：${res.error}`;
       return `🧬 **Hermes 自我进化完成！新技能已沉淀到本地技能库：**\n\n- **技能名称**: **${res.skill.name}** (\`${res.skill.id}\`)\n- **生成文件**: \n  - \`skills/${res.skill.id}.json\` (结构化配置)\n  - \`skills/${res.skill.id}.md\` (开源标准 SKILL.md 文档)\n\n💡 免 Key 模式下生成的是**通用模板**（默认命令为高 CPU 进程排查），你可以直接编辑上述文件；接入大模型后，Agent 会按任务自动编写针对性的技能。\n\n在右侧 **「技能库」** 面板点击「运行」即可真实执行该技能的命令。`;
+    }
+
+    // 2.2 记忆检索意图: "检索记忆: ..." / "查看记忆" / "recall ..."
+    const recallMatch = text.match(/^(?:检索记忆|查询记忆|搜索记忆|查看记忆|recall)[:：\s]*(.*)$/i);
+    if (recallMatch) {
+      const query = (recallMatch[1] || '').trim();
+      emit({
+        type: 'tool_call',
+        tool: 'memory_recall',
+        title: `调用工具: memory_recall (检索 Hermes 长期语义记忆)`,
+        args: { query }
+      });
+      const res = query ? await runTool('memory_recall', { query }) : { query: '*', matches: memory.searchMemories('', 10) };
+      emit({ type: 'observation', tool: 'memory_recall', title: '记忆检索结果', result: res });
+      const items = res.matches || [];
+      if (!items.length) return `🧠 未检索到与「${query}」匹配的长期记忆。`;
+      return `🧠 **Hermes 长期记忆检索结果（共 ${items.length} 条）：**\n\n` + items.map(m => `- **[${m.category}]** ${m.content}`).join('\n');
+    }
+
+    // 2.3 读取文件意图: "读取文件: README.md" / "查看文件: package.json"
+    const readMatch = text.match(/^(?:读取文件|查看文件|read file)[:：\s]+(.+)$/i);
+    if (readMatch) {
+      const filePath = readMatch[1].trim().replace(/^['"`]|['"`]$/g, '');
+      emit({
+        type: 'tool_call',
+        tool: 'file_read',
+        title: `调用工具: file_read (读取文件 ${filePath})`,
+        args: { filePath }
+      });
+      const res = await runTool('file_read', { filePath });
+      emit({ type: 'observation', tool: 'file_read', title: '文件读取结果', result: res });
+      if (res.error) return `❌ 读取失败：${res.error}`;
+      return `📄 **文件读取完成：\`${res.filePath}\`** (${res.sizeBytes} bytes${res.truncated ? '，已截断预览' : ''})\n\n\`\`\`text\n${res.content}\n\`\`\``;
+    }
+
+    // 2.4 网页抓取意图: "抓取网页: https://..." / "访问网址: https://..."
+    const fetchMatch = text.match(/^(?:抓取网页|访问网页|访问网址|fetch)[:：\s]+(https?:\/\/\S+)$/i);
+    if (fetchMatch) {
+      const url = fetchMatch[1].trim();
+      emit({
+        type: 'tool_call',
+        tool: 'web_fetch',
+        title: `调用工具: web_fetch (抓取 ${url})`,
+        args: { url }
+      });
+      const res = await runTool('web_fetch', { url });
+      emit({ type: 'observation', tool: 'web_fetch', title: '网页抓取结果', result: res });
+      if (res.error) return `❌ 网页抓取失败：${res.error}`;
+      return `🌐 **网页抓取成功：\`${res.url}\`** (HTTP ${res.status})\n\n\`\`\`text\n${res.preview || '(无文本内容)'}\n\`\`\``;
     }
 
     // 2.5 执行已有技能: "执行技能: <名称>" / "运行技能: <名称>" —— 真正运行该技能在当前系统上的命令模板
