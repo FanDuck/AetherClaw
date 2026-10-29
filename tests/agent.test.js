@@ -292,12 +292,11 @@ test('18. Multi-turn context: follow-up saves last result to file and conversati
   assert.ok(recent.length >= 2);
   assert.equal(recent[recent.length - 1].role, 'assistant');
 
-  const outPath = path.join(TMP_HOME, 'saved_report.md');
-  const follow = await agent.run(`把刚才的结果保存为 ${path.basename(outPath)}`);
+  const outPath = path.join(TMP_HOME, '巡检报告.md');
+  const follow = await agent.run(`把刚才的结果保存为 ${outPath}`);
   assert.match(follow.finalAnswer, /保存为文件/);
-  const fullSaved = path.resolve(process.cwd(), path.basename(outPath));
-  assert.ok(fs.existsSync(fullSaved));
-  fs.unlinkSync(fullSaved);
+  assert.ok(fs.existsSync(outPath));
+  fs.unlinkSync(outPath);
 
   memory.clearEpisodes();
   assert.equal(memory.getRecentConversation(5).length, 0);
@@ -359,4 +358,32 @@ test('20. Native LLM SSE stream parser emits token deltas and reassembles tool_c
   assert.equal(msg.tool_calls.length, 1);
   assert.equal(msg.tool_calls[0].function.name, 'system_info');
   assert.equal(msg.tool_calls[0].function.arguments, '{"a":1}');
+});
+
+test('21. Regression: clearing skill commands, Chinese skill ID non-collision, and malformed URL handling', async () => {
+  // 1) Chinese skill names with shared ASCII suffixes must not collide when id is omitted
+  const s1 = memory.createOrUpdateSkill({ name: '清理 v1', description: '清理缓存', win32Command: 'echo 1' });
+  const s2 = memory.createOrUpdateSkill({ name: '转换 v1', description: '转换格式', win32Command: 'echo 2' });
+  assert.notEqual(s1.id, s2.id);
+
+  // 2) Updating a skill with empty string "" must clear the command template rather than keeping the old one
+  const updated = memory.createOrUpdateSkill({ id: s1.id, name: '清理 v1', win32Command: '' });
+  assert.equal(updated.commandTemplate.win32, '');
+  memory.deleteSkill(s1.id);
+  memory.deleteSkill(s2.id);
+
+  // 3) Malformed percent-encoded URL must return 400 instead of crashing with 500 URIError
+  const server = createServer();
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const { port } = server.address();
+  try {
+    const badUrl = await request(port, {
+      method: 'DELETE',
+      path: '/api/memory/%E0%A4%A',
+      headers: { Host: `127.0.0.1:${port}` }
+    });
+    assert.equal(badUrl.status, 400);
+  } finally {
+    server.close();
+  }
 });

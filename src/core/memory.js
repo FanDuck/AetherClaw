@@ -310,10 +310,25 @@ class MemoryAndSkillEngine {
    * 创建或进化新技能（Hermes 自我进化核心接口）
    */
   createOrUpdateSkill({ id, name, description, triggerKeywords = [], steps = [], commandTemplate = {} }) {
-    const safeId = (id || name || `skill_${Date.now()}`)
+    const rawId = (id && String(id).trim()) || '';
+    const cleanedFromId = rawId
       .toLowerCase()
       .replace(/[^a-z0-9_-]+/g, '_')
-      .replace(/^_+|_+$/g, '') || `skill_${Date.now()}`;
+      .replace(/^_+|_+$/g, '');
+    const cleanedFromName = String(name || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+
+    // 如果显式提供了 id 且清洗后非空则使用它；若仅提供了中文/混合名称，附上简短哈希防止不同中文技能撞名
+    let safeId = cleanedFromId;
+    if (!safeId) {
+      const nameHash = Array.from(String(name || '')).reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0);
+      const suffix = Math.abs(nameHash).toString(36).slice(0, 5);
+      safeId = cleanedFromName.length >= 3
+        ? cleanedFromName
+        : `skill_${cleanedFromName ? cleanedFromName + '_' : ''}${suffix || Date.now().toString(36)}`;
+    }
 
     const existingPath = path.join(SKILLS_DIR, `${safeId}.json`);
     let existing = null;
@@ -324,6 +339,9 @@ class MemoryAndSkillEngine {
         existing = null;
       }
     }
+
+    const prevWin = existing && existing.commandTemplate ? existing.commandTemplate.win32 : '';
+    const prevLinux = existing && existing.commandTemplate ? existing.commandTemplate.linux : '';
 
     const skillObj = {
       id: safeId,
@@ -336,8 +354,8 @@ class MemoryAndSkillEngine {
         ? steps
         : String(steps).split('\n').map(s => s.trim()).filter(Boolean),
       commandTemplate: {
-        win32: commandTemplate.win32 || (existing && existing.commandTemplate ? existing.commandTemplate.win32 : ''),
-        linux: commandTemplate.linux || (existing && existing.commandTemplate ? existing.commandTemplate.linux : '')
+        win32: commandTemplate.win32 !== undefined ? commandTemplate.win32 : prevWin,
+        linux: commandTemplate.linux !== undefined ? commandTemplate.linux : prevLinux
       },
       version: existing ? `${ parseInt(existing.version || '1', 10) + 1 }.0.0` : '1.0.0',
       usageCount: existing ? (existing.usageCount || 1) + 1 : 1,

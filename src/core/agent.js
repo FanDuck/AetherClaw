@@ -313,7 +313,7 @@ class AetherClawAgent {
       if (!lastEp || !lastEp.finalAnswer) {
         return `ℹ️ 当前会话还没有上一轮执行结果可供保存。请先运行一次巡检或分析指令，再追问「把刚才的结果保存为 report.md」！`;
       }
-      const fileMatch = text.match(/([a-zA-Z0-9_.-]+\.(?:md|txt|json|log))/i);
+      const fileMatch = text.match(/((?:[a-zA-Z]:[\\/])?[^\s"'`:：,，]+\.(?:md|txt|json|log|csv|html))/i);
       const targetFile = fileMatch ? fileMatch[1] : 'report.md';
       emit({
         type: 'thought',

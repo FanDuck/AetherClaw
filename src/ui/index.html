@@ -516,7 +516,8 @@
 
     async function send(promptText) {
       const input = $('#promptInput'); const prompt = (promptText ?? input.value).trim();
-      if (!prompt || sending) return;
+      if (!prompt) return;
+      if (sending) return toast('正在执行当前任务，请稍候…');
       sending = true; $('#sendBtn').disabled = true; input.value = ''; input.style.height = 'auto';
 
       const u = document.createElement('div'); u.className = 'msg msg-user'; u.textContent = prompt; msgs.appendChild(u);
@@ -536,7 +537,10 @@
             const chunk = buf.slice(0, i); buf = buf.slice(i + 2);
             const ev = /^event: (.+)$/m.exec(chunk)?.[1]; const data = /^data: (.+)$/m.exec(chunk)?.[1];
             if (!ev || !data) continue; const p = JSON.parse(data);
-            if (ev === 'step') addStep(stepsBox, p, t0);
+            if (ev === 'step') {
+              if (p.type === 'tool_call' && streamed) { streamed = ''; ans.innerHTML = ''; ans.classList.remove('caret'); }
+              addStep(stepsBox, p, t0);
+            }
             else if (ev === 'token' && p.delta) {
               if (think.parentNode) think.remove();
               streamed += p.delta;

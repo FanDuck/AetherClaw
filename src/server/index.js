@@ -89,6 +89,14 @@ function timingSafeEqual(a, b) {
   return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
 }
 
+function safeDecode(segment) {
+  try {
+    return decodeURIComponent(segment);
+  } catch (_) {
+    throw Object.assign(new Error('Malformed URL parameter'), { status: 400 });
+  }
+}
+
 /**
  * @param {{token?: string}} [opts]
  */
@@ -247,7 +255,7 @@ function createServer(opts = {}) {
       }
 
       if (req.method === 'DELETE' && pathname.startsWith('/api/memory/')) {
-        const id = decodeURIComponent(pathname.replace('/api/memory/', ''));
+        const id = safeDecode(pathname.replace('/api/memory/', ''));
         memory.deleteMemory(id);
         return sendJson(res, 200, { success: true, memories: memory.state.semanticMemories });
       }
@@ -260,7 +268,10 @@ function createServer(opts = {}) {
           description: body.description,
           triggerKeywords: body.triggerKeywords || [],
           steps: body.steps || [],
-          commandTemplate: { win32: body.win32Command || '', linux: body.linuxCommand || '' }
+          commandTemplate: {
+            win32: typeof body.win32Command === 'string' ? body.win32Command : undefined,
+            linux: typeof body.linuxCommand === 'string' ? body.linuxCommand : undefined
+          }
         });
         return sendJson(res, 200, { success: true, skill, skills: memory.listSkills() });
       }
@@ -272,7 +283,7 @@ function createServer(opts = {}) {
       }
 
       if (req.method === 'GET' && /^\/api\/skills\/[^/]+\/md$/.test(pathname)) {
-        const id = decodeURIComponent(pathname.replace(/^\/api\/skills\/|\/md$/g, ''));
+        const id = safeDecode(pathname.replace(/^\/api\/skills\/|\/md$/g, ''));
         const exported = memory.getSkillMarkdown(id);
         if (!exported) return sendJson(res, 404, { error: `Skill not found: ${id}` });
         if (urlObj.searchParams.get('download') === '1') {
@@ -286,7 +297,7 @@ function createServer(opts = {}) {
       }
 
       if (req.method === 'DELETE' && pathname.startsWith('/api/skills/')) {
-        const id = decodeURIComponent(pathname.replace('/api/skills/', ''));
+        const id = safeDecode(pathname.replace('/api/skills/', ''));
         const removed = memory.deleteSkill(id);
         return sendJson(res, 200, { success: removed, skills: memory.listSkills() });
       }
