@@ -6,15 +6,25 @@ on:
   pull_request:
     branches: [ main, master ]
 
+# 最小权限：CI 只需要读取代码
+permissions:
+  contents: read
+
+# 同一分支连续推送时，取消旧的运行，节省 CI 时间
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: Test on ${{ matrix.os }} (Node ${{ matrix.node }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        node: [20, 22]
+        node: [18, 20, 22]
 
     steps:
       - name: Checkout Repository
@@ -25,5 +35,15 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
 
+      - name: Syntax check (all source files)
+        shell: bash
+        run: |
+          for f in $(git ls-files '*.js'); do node --check "$f"; done
+
       - name: Run Cross-Platform Test Suite
         run: npm test
+
+      - name: CLI smoke test (--version / --help)
+        run: |
+          node bin/aetherclaw.js --version
+          node bin/aetherclaw.js --help

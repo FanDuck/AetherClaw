@@ -1,7 +1,5 @@
 <div align="center">
 
-<img src="assets/logo.png" alt="AetherClaw Logo" width="96" />
-
 <img src="assets/banner.svg" alt="AetherClaw Banner" width="100%" />
 
 <br/>
@@ -11,7 +9,7 @@
 **An OpenClaw & Hermes-Inspired Cross-Platform (Windows & Linux) Self-Evolving Autonomous AI Agent Framework**
 
 [![CI Status](https://github.com/FanDuck/AetherClaw/actions/workflows/ci.yml/badge.svg)](https://github.com/FanDuck/AetherClaw/actions)
-[![Release Version](https://img.shields.io/badge/Release-v1.0.0-0284c7.svg)](https://github.com/FanDuck/AetherClaw/releases)
+[![Release Version](https://img.shields.io/badge/Release-v1.2.0-0284c7.svg)](https://github.com/FanDuck/AetherClaw/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/OS-Windows%20%7C%20Linux-a855f7.svg)](#)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18.0-339933.svg)](https://nodejs.org/)

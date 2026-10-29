@@ -1,0 +1,12 @@
+# Normalize line endings across platforms.
+# 关键：.bat 必须是 CRLF（GitHub 的 "Download ZIP" 给 Windows 小白用户用，LF 的批处理会出怪问题），
+#       .sh 必须是 LF（CRLF 会导致 "bad interpreter: /usr/bin/env bash\r"）。
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.sh  text eol=lf
+
+# Binary assets
+*.png binary
+*.jpg binary
+*.ico binary

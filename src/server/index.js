@@ -21,6 +21,7 @@ const pkg = require('../../package.json');
 
 const UI_HTML_PATH = path.join(__dirname, '..', 'ui', 'index.html');
 const LOGO_PATH = path.join(__dirname, '..', '..', 'assets', 'logo.png');
+const LOGO_SVG_PATH = path.join(__dirname, '..', '..', 'assets', 'logo.svg');
 const MAX_BODY = 1024 * 1024 * 2;
 
 const LOOPBACK = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
@@ -52,18 +53,25 @@ function sendJson(res, status, payload) {
 
 function parseBody(req) {
   return new Promise((resolve, reject) => {
-    let raw = '';
+    // 以 Buffer 累积，最后统一按 UTF-8 解码：
+    // 逐块 `raw += chunk` 会在多字节字符（如中文）恰好被分到两个 chunk 时产生乱码。
+    const chunks = [];
+    let size = 0;
     let tooLarge = false;
     req.on('data', (chunk) => {
       if (tooLarge) return;
-      raw += chunk;
-      if (raw.length > MAX_BODY) {
+      size += chunk.length;
+      if (size > MAX_BODY) {
         tooLarge = true;
+        chunks.length = 0;
         reject(Object.assign(new Error('Payload too large'), { status: 413 }));
+        return;
       }
+      chunks.push(chunk);
     });
     req.on('end', () => {
       if (tooLarge) return;
+      const raw = Buffer.concat(chunks).toString('utf8');
       if (!raw) return resolve({});
       try {
         resolve(JSON.parse(raw));
@@ -129,13 +137,18 @@ function createServer(opts = {}) {
         return res.end(html);
       }
 
+      if (req.method === 'GET' && pathname === '/assets/logo.svg') {
+        res.writeHead(200, { 'Content-Type': 'image/svg+xml; charset=utf-8', 'Cache-Control': 'public, max-age=86400', 'X-Content-Type-Options': 'nosniff' });
+        return res.end(fs.readFileSync(LOGO_SVG_PATH));
+      }
+
       if (req.method === 'GET' && (pathname === '/assets/logo.png' || pathname === '/favicon.ico')) {
         res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400', 'X-Content-Type-Options': 'nosniff' });
         return res.end(fs.readFileSync(LOGO_PATH));
       }
 
       if (req.method === 'GET' && pathname === '/healthz') {
-        return sendJson(res, 200, { ok: true, version: pkg.version, uptimeMs: Date.now() - startedAt });
+        return sendJson(res, 200, { ok: true, version: pkg.version, uptimeMs: Date.now() - startedAt, activeTasks: busy });
       }
 
       // ---- API ----

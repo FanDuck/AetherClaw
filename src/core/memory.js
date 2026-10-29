@@ -1,4 +1,4 @@
-﻿/**
+/**
  * AetherClaw (灵爪) - Hermes-Style Hierarchical Memory & Self-Evolving Skill Engine
  * 灵感源自 Hermes Agent 的三层自我进化架构：
  * 1. Episodic Memory (情景记忆): 记录任务交互历史与执行轨迹
@@ -70,6 +70,20 @@ const BUILTIN_SKILLS = [
   }
 ];
 
+/**
+ * 中英文混合分词：英文/数字按词（≥2 字符），连续中文拆成相邻二字词（bigram）。
+ * 零依赖，足以让「我喜欢简洁的中文报告」命中「偏好结构化中文技术汇报」。
+ */
+function tokenize(text) {
+  const s = String(text || '').toLowerCase();
+  const tokens = new Set();
+  for (const w of s.match(/[a-z0-9_]{2,}/g) || []) tokens.add(w);
+  for (const run of s.match(/[\u4e00-\u9fff]+/g) || []) {
+    for (let i = 0; i < run.length - 1; i++) tokens.add(run.slice(i, i + 2));
+  }
+  return [...tokens];
+}
+
 class MemoryAndSkillEngine {
   constructor() {
     this.ensureDirs();
@@ -91,7 +105,10 @@ class MemoryAndSkillEngine {
           episodicHistory: Array.isArray(parsed.episodicHistory) ? parsed.episodicHistory : []
         };
       } catch (e) {
-        // Fallback if corrupted
+        // 文件损坏：先备份再重建，绝不静默覆盖用户的历史记忆
+        try {
+          fs.renameSync(MEMORY_FILE, `${MEMORY_FILE}.corrupt-${Date.now()}.bak`);
+        } catch (_) { /* 备份失败也不阻断启动 */ }
       }
     }
     const initial = {
@@ -183,23 +200,26 @@ class MemoryAndSkillEngine {
   }
 
   /**
-   * 检索相关长期记忆
+   * 检索相关长期记忆（支持中英文混合：英文按词、中文按相邻二字词 bigram 匹配）。
+   * strict=true 时没有任何命中就返回空数组（供 memory_recall 工具使用），
+   * 否则回退为最近的若干条记忆（供 System Prompt 注入使用）。
    */
-  searchMemories(query = '', limit = 8) {
+  searchMemories(query = '', limit = 8, { strict = false } = {}) {
     if (!query || !query.trim()) {
       return this.state.semanticMemories.slice(0, limit);
     }
-    const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+    const terms = tokenize(query);
     const scored = this.state.semanticMemories.map(mem => {
       const hay = `${mem.content} ${mem.category} ${(mem.tags || []).join(' ')}`.toLowerCase();
       let score = 0;
       for (const term of terms) {
-        if (hay.includes(term)) score += 2;
+        if (hay.includes(term)) score += 1;
       }
       return { mem, score };
     });
     const matched = scored.filter(s => s.score > 0).sort((a, b) => b.score - a.score).map(s => s.mem);
-    return matched.length > 0 ? matched.slice(0, limit) : this.state.semanticMemories.slice(0, limit);
+    if (matched.length > 0) return matched.slice(0, limit);
+    return strict ? [] : this.state.semanticMemories.slice(0, limit);
   }
 
   /**
@@ -220,6 +240,23 @@ class MemoryAndSkillEngine {
     }
     this.saveMemoryState();
     return entry;
+  }
+
+  /**
+   * 记录一次技能被使用（累计调用次数，不改变版本号）
+   */
+  recordSkillUse(id) {
+    const jsonPath = path.join(SKILLS_DIR, `${path.basename(String(id))}.json`);
+    if (!fs.existsSync(jsonPath)) return null;
+    try {
+      const skill = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+      skill.usageCount = (skill.usageCount || 0) + 1;
+      skill.lastUsedAt = new Date().toISOString();
+      atomicWrite(jsonPath, JSON.stringify(skill, null, 2));
+      return skill;
+    } catch (_) {
+      return null;
+    }
   }
 
   /**
@@ -300,3 +337,4 @@ class MemoryAndSkillEngine {
 }
 
 module.exports = new MemoryAndSkillEngine();
+module.exports.tokenize = tokenize;

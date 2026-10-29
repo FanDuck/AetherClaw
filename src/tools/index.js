@@ -9,6 +9,18 @@ const platform = require('../core/platform');
 const memory = require('../core/memory');
 const config = require('../core/config');
 
+const MAX_FILE_WRITE_BYTES = 2 * 1024 * 1024;
+const MAX_FETCH_BYTES = 512 * 1024;
+
+/**
+ * 敏感文件保护：Agent（尤其是被提示词注入诱导时）不得读写 API 密钥所在的文件。
+ * 注意：这只是文件工具层的防线，不是沙箱——shell_exec 仍然拥有当前用户的权限。
+ */
+function isProtectedPath(target) {
+  const base = path.basename(target).toLowerCase();
+  return base === '.env' || (base.startsWith('.env.') && base !== '.env.example') || base === 'config.local.json';
+}
+
 const TOOLS = {
   system_info: {
     name: 'system_info',
@@ -45,8 +57,15 @@ const TOOLS = {
       if (!cfg.allowShellExec) {
         return { error: 'Shell execution is currently disabled in AetherClaw settings.' };
       }
+      if (typeof command !== 'string' || !command.trim()) {
+        return { error: 'command must be a non-empty string' };
+      }
+      const workDir = cwd ? path.resolve(process.cwd(), String(cwd)) : process.cwd();
+      if (!fs.existsSync(workDir) || !fs.statSync(workDir).isDirectory()) {
+        return { error: `Working directory not found: ${workDir}` };
+      }
       return await platform.executeCommand(command, {
-        cwd: cwd || process.cwd(),
+        cwd: workDir,
         timeoutMs: cfg.shellTimeoutMs || 15000
       });
     }
@@ -70,6 +89,9 @@ const TOOLS = {
       if (!fs.existsSync(target)) {
         return { error: `Directory not found: ${target}` };
       }
+      if (!fs.statSync(target).isDirectory()) {
+        return { error: `Not a directory: ${target}` };
+      }
       const entries = fs.readdirSync(target, { withFileTypes: true });
       const items = entries.slice(0, 100).map(entry => {
         const full = path.join(target, entry.name);
@@ -86,6 +108,7 @@ const TOOLS = {
       return {
         directory: target,
         totalCount: entries.length,
+        truncated: entries.length > items.length,
         items
       };
     }
@@ -103,22 +126,45 @@ const TOOLS = {
         },
         maxChars: {
           type: 'number',
-          description: 'Maximum characters to return (default 6000).'
+          description: 'Maximum characters to return (default 6000, max 100000).'
         }
       },
       required: ['filePath']
     },
     async execute({ filePath, maxChars = 6000 }) {
+      if (typeof filePath !== 'string' || !filePath.trim()) {
+        return { error: 'filePath must be a non-empty string' };
+      }
       const target = path.resolve(process.cwd(), filePath);
+      if (isProtectedPath(target)) {
+        return { error: `Access denied: ${path.basename(target)} may contain secrets and is protected.` };
+      }
       if (!fs.existsSync(target)) {
         return { error: `File does not exist: ${target}` };
       }
-      const content = fs.readFileSync(target, 'utf8');
+      const stat = fs.statSync(target);
+      if (!stat.isFile()) {
+        return { error: `Not a regular file: ${target}` };
+      }
+      const limit = Math.max(1, Math.min(100000, Math.floor(Number(maxChars)) || 6000));
+      // 只读取前 limit*4 字节（UTF-8 最长 4 字节/字符），避免把巨型文件整个载入内存
+      const bytesToRead = Math.min(stat.size, limit * 4);
+      const buf = Buffer.alloc(bytesToRead);
+      const fd = fs.openSync(target, 'r');
+      try {
+        fs.readSync(fd, buf, 0, bytesToRead, 0);
+      } finally {
+        fs.closeSync(fd);
+      }
+      if (buf.includes(0)) {
+        return { error: `Binary file detected, refusing to read as text: ${target}`, sizeBytes: stat.size };
+      }
+      const text = buf.toString('utf8');
       return {
         filePath: target,
-        length: content.length,
-        truncated: content.length > maxChars,
-        content: content.slice(0, maxChars)
+        sizeBytes: stat.size,
+        truncated: stat.size > bytesToRead || text.length > limit,
+        content: text.slice(0, limit)
       };
     }
   },
@@ -141,16 +187,33 @@ const TOOLS = {
       required: ['filePath', 'content']
     },
     async execute({ filePath, content }) {
+      if (!config.get().allowFileWrite) {
+        return { error: 'File writing is currently disabled in AetherClaw settings.' };
+      }
+      if (typeof filePath !== 'string' || !filePath.trim()) {
+        return { error: 'filePath must be a non-empty string' };
+      }
+      const text = String(content ?? '');
+      const bytes = Buffer.byteLength(text, 'utf8');
+      if (bytes > MAX_FILE_WRITE_BYTES) {
+        return { error: `Content too large (${bytes} bytes, max ${MAX_FILE_WRITE_BYTES}).` };
+      }
       const target = path.resolve(process.cwd(), filePath);
+      if (isProtectedPath(target)) {
+        return { error: `Access denied: ${path.basename(target)} is protected.` };
+      }
+      if (fs.existsSync(target) && fs.statSync(target).isDirectory()) {
+        return { error: `Target is a directory: ${target}` };
+      }
       const parent = path.dirname(target);
       if (!fs.existsSync(parent)) {
         fs.mkdirSync(parent, { recursive: true });
       }
-      fs.writeFileSync(target, String(content ?? ''), 'utf8');
+      fs.writeFileSync(target, text, 'utf8');
       return {
         success: true,
         filePath: target,
-        bytesWritten: Buffer.byteLength(String(content ?? ''), 'utf8')
+        bytesWritten: bytes
       };
     }
   },
@@ -169,15 +232,34 @@ const TOOLS = {
       required: ['url']
     },
     async execute({ url }) {
+      let parsed;
       try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 10000);
-        const res = await fetch(url, {
+        parsed = new URL(String(url));
+      } catch (_) {
+        return { error: `Invalid URL: ${url}` };
+      }
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return { error: 'Only http:// and https:// URLs are supported.' };
+      }
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 10000);
+      try {
+        const res = await fetch(parsed, {
           signal: controller.signal,
-          headers: { 'User-Agent': 'AetherClaw-Agent/1.0' }
+          headers: { 'User-Agent': 'AetherClaw-Agent/1.1' }
         });
-        clearTimeout(timer);
-        const rawText = await res.text();
+        // 流式读取并限制大小，避免超大响应撑爆内存
+        let received = 0;
+        const chunks = [];
+        let truncated = false;
+        if (res.body) {
+          for await (const chunk of res.body) {
+            received += chunk.length;
+            chunks.push(Buffer.from(chunk));
+            if (received >= MAX_FETCH_BYTES) { truncated = true; controller.abort(); break; }
+          }
+        }
+        const rawText = Buffer.concat(chunks).toString('utf8');
         // Strip heavy HTML tags for cleaner LLM reading
         const cleanText = rawText
           .replace(/<script[\s\S]*?<\/script>/gi, '')
@@ -187,12 +269,15 @@ const TOOLS = {
           .trim()
           .slice(0, 5000);
         return {
-          url,
+          url: parsed.href,
           status: res.status,
+          truncated,
           preview: cleanText
         };
       } catch (err) {
-        return { error: `Failed to fetch ${url}: ${err.message}` };
+        return { error: `Failed to fetch ${parsed.href}: ${err.name === 'AbortError' ? 'timeout or size limit reached' : err.message}` };
+      } finally {
+        clearTimeout(timer);
       }
     }
   },
@@ -241,7 +326,7 @@ const TOOLS = {
     async execute({ query }) {
       return {
         query,
-        matches: memory.searchMemories(query, 8)
+        matches: memory.searchMemories(query, 8, { strict: true })
       };
     }
   },
@@ -306,24 +391,30 @@ const TOOLS = {
   }
 };
 
-function getToolSpecsForLLM() {
-  return Object.values(TOOLS).map(t => ({
-    type: 'function',
-    function: {
-      name: t.name,
-      description: t.description,
-      parameters: t.parameters
-    }
-  }));
+/**
+ * 生成给大模型的工具声明。关闭「自动进化」时不暴露 skill_create，
+ * 这样配置项 autoEvolveSkills 才真正生效。
+ */
+function getToolSpecsForLLM({ autoEvolveSkills = true } = {}) {
+  return Object.values(TOOLS)
+    .filter(t => autoEvolveSkills || t.name !== 'skill_create')
+    .map(t => ({
+      type: 'function',
+      function: {
+        name: t.name,
+        description: t.description,
+        parameters: t.parameters
+      }
+    }));
 }
 
 async function runTool(name, args = {}) {
-  const tool = TOOLS[name];
-  if (!tool) {
+  if (!Object.prototype.hasOwnProperty.call(TOOLS, name)) {
     return { error: `Unknown tool: ${name}` };
   }
+  const safeArgs = args && typeof args === 'object' && !Array.isArray(args) ? args : {};
   try {
-    return await tool.execute(args || {});
+    return await TOOLS[name].execute(safeArgs);
   } catch (err) {
     return { error: err.message || String(err) };
   }
@@ -332,5 +423,6 @@ async function runTool(name, args = {}) {
 module.exports = {
   TOOLS,
   getToolSpecsForLLM,
-  runTool
+  runTool,
+  isProtectedPath
 };

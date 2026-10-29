@@ -1,4 +1,4 @@
-﻿/**
+/**
  * AetherClaw (灵爪) - Cross-Platform Runtime Adapter (Windows & Linux)
  *
  * - 自动识别 Windows / Linux / macOS，选择 PowerShell 或 Bash
@@ -9,6 +9,7 @@
  */
 
 const os = require('os');
+const fs = require('fs');
 const { spawn, exec } = require('child_process');
 
 // Dangerous command patterns blocked by default safety guardrails.
@@ -35,6 +36,22 @@ const DANGEROUS_PATTERNS = [
 ];
 
 const MAX_OUTPUT_BYTES = 1024 * 1024 * 2;
+
+// rm 的"递归 + 危险目标"检测：按命令分隔符切段后逐段分析，
+// 能识别 `rm -r -f /`、`sudo rm -rf /*`、`rm -rf ~/`、`echo ok; rm -rf /` 等变体。
+const DANGEROUS_RM_TARGET = /^(\/|\/\*|~|~\/|~\/\*|\$home|\$\{home\}|\$home\/|\$home\/\*|\*)$/i;
+function isDangerousRm(command) {
+  return command.split(/&&|\|\||;|\|/).some((segment) => {
+    const tokens = segment.trim().split(/\s+/).map((t) => t.replace(/^['"]|['"]$/g, ''));
+    const at = tokens.findIndex((t) => /(^|\/)rm$/.test(t));
+    if (at === -1) return false;
+    const rest = tokens.slice(at + 1);
+    const flags = rest.filter((t) => t.startsWith('-'));
+    const targets = rest.filter((t) => !t.startsWith('-'));
+    const recursive = flags.some((f) => /^-[a-z]*r[a-z]*$/i.test(f) || f === '--recursive');
+    return recursive && targets.some((t) => DANGEROUS_RM_TARGET.test(t));
+  });
+}
 
 class PlatformAdapter {
   constructor() {
@@ -70,7 +87,9 @@ class PlatformAdapter {
   /** Windows 用 PowerShell，Linux 用 bash/sh */
   getDefaultShell() {
     if (this.isWindows) return 'powershell.exe';
-    return process.env.SHELL || '/bin/bash';
+    // 精简容器（如 Alpine）可能没有 bash：依次回退到 $SHELL → /bin/bash → /bin/sh
+    const candidates = [process.env.SHELL, '/bin/bash', '/bin/sh'].filter(Boolean);
+    return candidates.find((p) => fs.existsSync(p)) || '/bin/sh';
   }
 
   _snapshotCpu() {
@@ -106,6 +125,9 @@ class PlatformAdapter {
   /** 检查命令是否触发安全拦截规则 */
   checkSafety(command) {
     const normalized = String(command || '').replace(/\s+/g, ' ').trim();
+    if (isDangerousRm(normalized)) {
+      return { safe: false, reason: 'Blocked potentially destructive command: recursive rm on a root/home/wildcard target' };
+    }
     for (const pattern of DANGEROUS_PATTERNS) {
       if (pattern.test(normalized)) {
         return {

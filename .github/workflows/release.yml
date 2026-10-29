@@ -1,0 +1,36 @@
+name: Release
+
+# 推送形如 v1.2.3 的标签时，自动在 GitHub 上创建对应的 Release（含更新日志与源码包）
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract release notes from CHANGELOG.md
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          # 取 "## [vX.Y.Z]" 到下一个 "## [" 之间的内容；找不到则使用默认文案
+          awk -v v="$VERSION" '
+            $0 ~ "^## \\[v" v "\\]" {found=1; next}
+            found && /^## \[/ {exit}
+            found {print}
+          ' CHANGELOG.md > release_notes.md
+          if [ ! -s release_notes.md ]; then
+            echo "AetherClaw ${GITHUB_REF_NAME}" > release_notes.md
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release_notes.md
+          generate_release_notes: false

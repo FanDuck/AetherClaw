@@ -7,19 +7,28 @@ const readline = require('readline');
 const platform = require('../core/platform');
 const agent = require('../core/agent');
 const memory = require('../core/memory');
+const pkg = require('../../package.json');
 
 function startCLI() {
   const sys = platform.getSystemSummary();
   console.log(`\n============================================================`);
-  console.log(`🦅 AetherClaw (灵爪) Interactive CLI v1.0.0`);
+  console.log(`🦅 AetherClaw (灵爪) Interactive CLI v${pkg.version}`);
   console.log(`🖥️  Environment: ${sys.osType} (${sys.shell})`);
-  console.log(`💡 Commands: /skills (查看技能), /memory (查看记忆), /exit (退出)`);
+  console.log(`💡 Commands: /help, /skills (查看技能), /memory (查看记忆), /exit (退出)`);
   console.log(`============================================================\n`);
 
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
     prompt: '🦅 AetherClaw > '
+  });
+
+  // 管道输入结束 / Ctrl+D 时，等当前任务跑完再退出，避免截断正在执行的命令
+  let running = 0;
+  let closed = false;
+  rl.on('close', () => {
+    closed = true;
+    if (running === 0) process.exit(0);
   });
 
   rl.prompt();
@@ -34,6 +43,25 @@ function startCLI() {
     if (input === '/exit' || input === 'exit' || input === 'quit') {
       console.log('👋 再见！AetherClaw 已安全退出。');
       process.exit(0);
+    }
+
+    if (input === '/help') {
+      console.log([
+        '',
+        '可用指令：',
+        '  /skills   查看已掌握的技能',
+        '  /memory   查看长期语义记忆',
+        '  /exit     退出',
+        '示例任务：',
+        '  请对当前系统进行全面健康巡检',
+        '  执行命令: Get-Date   (Windows)   /   执行命令: uname -a   (Linux)',
+        '  记住：我喜欢简洁的中文技术报告',
+        '  创建技能：高占用进程排查',
+        '  执行技能: 跨平台系统健康巡检',
+        ''
+      ].join('\n'));
+      rl.prompt();
+      return;
     }
 
     if (input === '/skills') {
@@ -58,6 +86,7 @@ function startCLI() {
       return;
     }
 
+    running++;
     try {
       const res = await agent.run(input, (step) => {
         console.log(`  ⚡ [${step.type}] ${step.title}`);
@@ -65,9 +94,12 @@ function startCLI() {
       console.log(`\n${res.finalAnswer}\n`);
     } catch (err) {
       console.error(`❌ Error: ${err.message}\n`);
+    } finally {
+      running--;
     }
 
-    rl.prompt();
+    if (closed && running === 0) process.exit(0);
+    if (!closed) rl.prompt();
   });
 }
 

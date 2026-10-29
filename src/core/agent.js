@@ -1,4 +1,4 @@
-﻿/**
+/**
  * AetherClaw (灵爪) - Autonomous ReAct & Self-Evolving Agent Core
  * 结合 OpenClaw 的跨平台工具执行能力与 Hermes 的记忆检索/技能自动进化闭环。
  * 支持：
@@ -78,8 +78,8 @@ class AetherClawAgent {
     }
 
     // Check if an LLM API Key is configured (or if local Ollama is used)
-    const isOllama = cfg.baseUrl.includes('11434') || cfg.baseUrl.includes('localhost');
-    if (cfg.hasApiKey || isOllama) {
+    const isLocalLLM = /(^|\/\/)(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(cfg.baseUrl);
+    if (cfg.hasApiKey || isLocalLLM) {
       try {
         const finalAnswer = await this.runWithLLM(userPrompt, emit);
         memory.recordEpisode({ userPrompt, finalAnswer, steps });
@@ -108,7 +108,7 @@ class AetherClawAgent {
       { role: 'system', content: this.buildSystemPrompt(userPrompt) },
       { role: 'user', content: userPrompt }
     ];
-    const tools = getToolSpecsForLLM();
+    const tools = getToolSpecsForLLM({ autoEvolveSkills: cfg.autoEvolveSkills });
     const maxSteps = cfg.maxSteps || 8;
 
     for (let stepIdx = 1; stepIdx <= maxSteps; stepIdx++) {
@@ -118,20 +118,30 @@ class AetherClawAgent {
         detail: `Endpoint: ${cfg.baseUrl}/chat/completions`
       });
 
-      const response = await fetch(`${cfg.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(cfg.apiKey ? { Authorization: `Bearer ${cfg.apiKey}` } : {})
-        },
-        body: JSON.stringify({
-          model: cfg.model,
-          messages,
-          tools,
-          tool_choice: 'auto',
-          temperature: 0.3
-        })
-      });
+      let response;
+      try {
+        response = await fetch(`${cfg.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(cfg.apiKey ? { Authorization: `Bearer ${cfg.apiKey}` } : {})
+          },
+          body: JSON.stringify({
+            model: cfg.model,
+            messages,
+            tools,
+            tool_choice: 'auto',
+            temperature: 0.3
+          }),
+          // 避免上游无响应时请求永久挂起
+          signal: AbortSignal.timeout(cfg.llmTimeoutMs || 60000)
+        });
+      } catch (err) {
+        const reason = err && (err.name === 'TimeoutError' || err.name === 'AbortError')
+          ? `请求超时 (${(cfg.llmTimeoutMs || 60000) / 1000}s)`
+          : (err.cause && err.cause.code) || err.message;
+        throw new Error(`无法连接大模型接口 ${cfg.baseUrl}: ${reason}`);
+      }
 
       if (!response.ok) {
         const errText = await response.text();
@@ -234,8 +244,8 @@ class AetherClawAgent {
       const args = {
         id: skillId,
         name: skillName,
-        description: `由用户指令「${text}」自动进化生成的跨平台可复用技能。`,
-        triggerKeywords: [skillName, '自动化', 'custom'],
+        description: `由用户指令「${text}」生成的技能模板（免 Key 模式下使用通用的"高 CPU 进程排查"命令作为起点，可在 skills/ 目录中直接编辑；接入大模型后会根据任务自动生成针对性的步骤与命令）。`,
+        triggerKeywords: [skillName],
         steps: [
           '1. 自动检测当前操作系统环境 (Windows PowerShell / Linux Bash)',
           '2. 执行对应的系统状态检查与目录扫描',
@@ -252,7 +262,41 @@ class AetherClawAgent {
       });
       const res = await runTool('skill_create', args);
       emit({ type: 'observation', tool: 'skill_create', title: '技能文件已生成', result: res });
-      return `🧬 **Hermes 自我进化完成！新技能已沉淀到本地技能库：**\n\n- **技能名称**: **${res.skill.name}** (\`${res.skill.id}\`)\n- **生成文件**: \n  - \`skills/${res.skill.id}.json\` (结构化配置)\n  - \`skills/${res.skill.id}.md\` (开源标准 SKILL.md 文档)\n\n你可以在右侧 **「技能进化库 (Skills)」** 面板中随时查看或一键触发它！`;
+      return `🧬 **Hermes 自我进化完成！新技能已沉淀到本地技能库：**\n\n- **技能名称**: **${res.skill.name}** (\`${res.skill.id}\`)\n- **生成文件**: \n  - \`skills/${res.skill.id}.json\` (结构化配置)\n  - \`skills/${res.skill.id}.md\` (开源标准 SKILL.md 文档)\n\n💡 免 Key 模式下生成的是**通用模板**（默认命令为高 CPU 进程排查），你可以直接编辑上述文件；接入大模型后，Agent 会按任务自动编写针对性的技能。\n\n在右侧 **「技能库」** 面板点击「运行」即可真实执行该技能的命令。`;
+    }
+
+    // 2.5 执行已有技能: "执行技能: <名称>" / "运行技能: <名称>" —— 真正运行该技能在当前系统上的命令模板
+    const skillRun = text.match(/^(?:执行技能|运行技能|run skill)[:：\s]+(.+)$/i);
+    if (skillRun) {
+      const wanted = skillRun[1].trim().toLowerCase();
+      const skill = memory.listSkills().find(s =>
+        s.id.toLowerCase() === wanted || s.name.toLowerCase() === wanted
+      ) || memory.listSkills().find(s => s.name.toLowerCase().includes(wanted) || wanted.includes(s.name.toLowerCase()));
+      if (!skill) {
+        return `❌ 没有找到名为「${skillRun[1].trim()}」的技能。可以在右侧「技能库」面板查看现有技能。`;
+      }
+      const command = platform.isWindows ? skill.commandTemplate?.win32 : skill.commandTemplate?.linux;
+      if (!command) {
+        return `⚠️ 技能「${skill.name}」没有适用于当前系统（${platform.isWindows ? 'Windows' : 'Linux'}）的命令模板。\n\n执行步骤参考：\n${(skill.steps || []).map(s => `- ${s}`).join('\n')}`;
+      }
+      emit({
+        type: 'tool_call',
+        tool: 'shell_exec',
+        title: `执行技能「${skill.name}」的 ${platform.isWindows ? 'PowerShell' : 'Bash'} 命令模板`,
+        args: { command }
+      });
+      const res = await runTool('shell_exec', { command });
+      emit({ type: 'observation', tool: 'shell_exec', title: '技能执行结果', result: res });
+      memory.recordSkillUse(skill.id); // 累计调用次数（不改变版本号）
+      return [
+        `🧬 **技能已执行：${skill.name}** (\`${skill.id}\`)`,
+        `- **状态**: ${res.success ? '✅ 成功' : `⚠️ 退出码 ${res.exitCode}`}${res.timedOut ? '（超时）' : ''}`,
+        `- **命令**: \`${command}\``,
+        ``,
+        '```text',
+        res.stdout || res.stderr || res.error || '(无输出)',
+        '```'
+      ].join('\n');
     }
 
     // 3. 显式终端命令执行: "执行命令: ..." / "run: ..."

@@ -2,6 +2,22 @@
 
 本项目遵循 [语义化版本 2.0.0 (Semantic Versioning)](https://semver.org/lang/zh-CN/) 规范。
 
+## [v1.2.0] - 2026-10-29
+
+### ✨ 核心功能与体验升级 (Enhancements)
+- **纯矢量品牌 Logo 统一 (`assets/logo.svg`)**：修复 GitHub CSP 对 SVG 内嵌 Base64 位图的拦截问题，将横幅 (`assets/banner.svg`)、控制台预览图 (`assets/console-preview.svg`) 与 Web 控制台左上角全部升级为 100% 纯矢量高清 Logo。
+- **技能一键真实执行 (`执行技能: <名称>`)**：点击右侧技能面板的「运行」按钮或输入 `执行技能: xxx` 时，直接匹配并执行该技能在当前系统（Windows PowerShell / Linux Bash）下的命令模板，并独立累计调用次数（不再误增版本号）。
+- **中文二元分词语义记忆检索 (`tokenize`)**：支持中英文混合分词检索，中文长句无需空格即可精准命中历史记忆；`memory_recall` 工具在无相关记忆时不再返回无关兜底项。
+- **内置零依赖 `.env` 加载器**：复制 `.env.example` 为 `.env` 后无需安装任何第三方库即可在启动时自动加载。
+- **CLI 全局命令与参数完善 (`bin/aetherclaw.js`)**：修复全局命令入口未调用 `main()` 的问题，新增 `--version`、`--help` 及 `--run` 参数校验。
+
+### 🛡️ 安全与跨平台健壮性加固 (Security & Reliability)
+- **分段式 `rm` 危险命令语法级检测 (`isDangerousRm`)**：可精准拦截 `rm -r -f /`、`sudo rm -rf /*`、`echo ok; rm -rf ~/` 等变体。
+- **敏感文件读写保护 (`isProtectedPath`)**：`file_read` 与 `file_write` 自动拒绝对 `.env` 与 `config.local.json` 的直接访问，防止提示词注入窃取密钥；自动检测并拒绝把二进制文件当成文本读取。
+- **TCP 分块 UTF-8 解码修复 (`parseBody`)**：修复多字节中文字符跨 TCP 数据包分块时产生乱码的隐患。
+- **跨平台换行符规范 (`.gitattributes`)**：强制 `.bat` 使用 `CRLF`、`.sh` 使用 `LF`，确保从 GitHub 下载 ZIP 在 Windows 与 Linux 下均可直接运行。
+- **GitHub Release 自动化流水线 (`.github/workflows/release.yml`)**：推送版本标签时自动提取 `CHANGELOG.md` 生成官方 GitHub Release；CI 矩阵覆盖 Node 18 / 20 / 22，自动化测试扩充至 **17 项**。
+
 ## [v1.1.0] - 2026-10-29
 
 ### 🔐 安全加固 (Security)

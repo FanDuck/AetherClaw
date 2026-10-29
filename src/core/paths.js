@@ -17,10 +17,10 @@ function ensureDir(dir) {
 }
 
 /** 原子写入：先写临时文件再 rename，进程崩溃/断电也不会留下半截 JSON。 */
-function atomicWrite(file, content) {
+function atomicWrite(file, content, mode) {
   ensureDir(path.dirname(file));
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(tmp, content, 'utf8');
+  fs.writeFileSync(tmp, content, mode ? { encoding: 'utf8', mode } : 'utf8');
   fs.renameSync(tmp, file);
 }
 
