@@ -20,6 +20,7 @@ const { TOOLS } = require('../tools');
 const pkg = require('../../package.json');
 
 const UI_HTML_PATH = path.join(__dirname, '..', 'ui', 'index.html');
+const LOGO_PATH = path.join(__dirname, '..', '..', 'assets', 'logo.png');
 const MAX_BODY = 1024 * 1024 * 2;
 
 const LOOPBACK = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
@@ -126,6 +127,11 @@ function createServer(opts = {}) {
             "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
         }));
         return res.end(html);
+      }
+
+      if (req.method === 'GET' && (pathname === '/assets/logo.png' || pathname === '/favicon.ico')) {
+        res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400', 'X-Content-Type-Options': 'nosniff' });
+        return res.end(fs.readFileSync(LOGO_PATH));
       }
 
       if (req.method === 'GET' && pathname === '/healthz') {

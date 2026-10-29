@@ -1,10 +1,12 @@
 <div align="center">
 
+<img src="assets/logo.png" alt="AetherClaw Logo" width="96" />
+
 <img src="assets/banner.svg" alt="AetherClaw (灵爪) Banner" width="100%" />
 
 <br/>
 
-# 🦅 AetherClaw (灵爪)
+# AetherClaw (灵爪)
 
 **融合 OpenClaw 跨平台本地操控与 Hermes 三层记忆/自我进化的下一代开源自主 AI Agent 框架**  
 *An OpenClaw & Hermes-Inspired Cross-Platform (Windows & Linux) Self-Evolving Autonomous AI Agent Framework*
