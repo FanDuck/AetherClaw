@@ -2,6 +2,19 @@
 
 本项目遵循 [语义化版本 2.0.0 (Semantic Versioning)](https://semver.org/lang/zh-CN/) 规范。
 
+## [v1.6.0] - 2026-10-30
+
+### ⏰ 后台定时自动化巡检、Webhook 消息推送、内置技能模板市场与一键全量备份
+- **后台定时自动化任务调度引擎 (`src/core/scheduler.js` + `/api/schedules`)**：
+  - 支持在 Web 控制台 **「⏰ 自动化」** 面板或通过自然语言（`创建定时任务: 每 30 分钟 执行系统健康巡检`）创建周期性后台任务，自动记录最近运行状态、结果摘要与累计执行次数，支持随时 **「▶ 立即运行」**、**「⏸ 暂停 / ▶ 启用」** 与删除。
+- **多渠道 Webhook 消息推送集成 (`notify_send` 工具 + `POST /api/config/webhook/test`)**：
+  - 自适应识别 **飞书 (Feishu)**、**钉钉 (DingTalk)**、**企业微信 (WeCom)**、**Bark** 及通用 JSON Webhook 格式；提供第 10 个内置工具 `notify_send`，支持定时任务完成后自动推送巡检报告，并在设置弹窗中提供 **「🔔 测试推送」** 按钮。
+- **内置精选跨平台技能模板市场 (`SKILL_GALLERY` + `/api/skills/gallery`)**：
+  - 内置 6 款开箱即用的跨平台（Windows PowerShell + Linux Bash）实用技能模板：**端口占用与监听排查 (`port_scanner`)**、**高占用进程排行 (`top_processes`)**、**网络连通与 DNS 诊断 (`net_diagnostics`)**、**大文件扫描分析 (`large_file_finder`)**、**Git 仓库巡检 (`git_inspector`)** 与 **Docker 容器状态巡检 (`docker_inspector`)**，支持在网页端 **「🏪 模板市场」** 一键安装。
+- **全量数据一键备份与迁移恢复 (`GET /api/backup` & `POST /api/backup/restore`)**：
+  - 支持将长期语义记忆、历史轨迹、自定义技能与定时任务一键导出为单个 `.json` 备份包，并在任意机器上一键导入恢复。
+- **自动化测试扩充**：测试套件由 25 项扩充至 **28 项**，100% 通过。
+
 ## [v1.5.0] - 2026-10-29
 
 ### 🛡️ 生产级容器沙箱、Bearer Token 鉴权、TLS 反向代理与多架构 GHCR 预构建镜像

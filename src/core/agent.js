@@ -9,6 +9,7 @@
 const platform = require('./platform');
 const config = require('./config');
 const memory = require('./memory');
+const scheduler = require('./scheduler');
 const { getToolSpecsForLLM, runTool } = require('../tools');
 
 /** 工具结果回灌给模型前做长度裁剪，避免上下文被超长输出撑爆。 */
@@ -457,6 +458,41 @@ class AetherClawAgent {
       return `🌐 **网页抓取成功：\`${res.url}\`** (HTTP ${res.status})\n\n\`\`\`text\n${res.preview || '(无文本内容)'}\n\`\`\``;
     }
 
+    // 2.45 发送 Webhook 通知意图: "发送通知: ..." / "推送消息: ..." / "notify: ..."
+    const notifyMatch = text.match(/^(?:发送通知|推送通知|推送消息|notify)[:：\s]+(.+)$/i);
+    if (notifyMatch) {
+      const msgBody = notifyMatch[1].trim();
+      emit({
+        type: 'tool_call',
+        tool: 'notify_send',
+        title: `调用工具: notify_send (Webhook 消息推送)`,
+        args: { title: 'AetherClaw 主动通知', message: msgBody }
+      });
+      const res = await runTool('notify_send', { title: 'AetherClaw 主动通知', message: msgBody });
+      emit({ type: 'observation', tool: 'notify_send', title: 'Webhook 推送结果', result: res });
+      if (res.error) return `❌ 通知推送失败：${res.error}`;
+      return `🔔 **Webhook 通知已发送！**\n- **目标渠道**: ${res.channel}\n- **响应耗时**: ${res.latencyMs} ms\n- **状态**: ${res.message}`;
+    }
+
+    // 2.48 创建定时任务意图: "创建定时任务: 每 30 分钟 执行系统健康巡检"
+    const schedMatch = text.match(/^(?:创建定时任务|添加定时任务|定时任务|schedule)[:：\s]*(?:每\s*(\d+)\s*分钟\s*)?(.+)$/i);
+    if (schedMatch && schedMatch[2]) {
+      const intervalMinutes = schedMatch[1] ? Number(schedMatch[1]) : 60;
+      const taskPrompt = schedMatch[2].trim();
+      const created = scheduler.createOrUpdate({
+        name: taskPrompt.slice(0, 28),
+        prompt: taskPrompt,
+        intervalMinutes,
+        enabled: true
+      });
+      emit({
+        type: 'thought',
+        title: `已注册后台定时任务: ${created.name} (每 ${created.intervalMinutes} 分钟)`,
+        detail: `ID: ${created.id}, 下次执行: ${created.nextRunAt}`
+      });
+      return `⏰ **后台定时自动化任务已创建！**\n\n- **任务名称**: **${created.name}** (\`${created.id}\`)\n- **执行指令**: \`${created.prompt}\`\n- **执行周期**: 每 **${created.intervalMinutes}** 分钟自动运行一次\n- **下次运行**: \`${created.nextRunAt}\`\n\n你可以在右侧 **「⏰ 自动化/备份」** 面板随时立即运行、暂停或删除该定时任务。`;
+    }
+
     // 2.5 执行已有技能: "执行技能: <名称>" / "运行技能: <名称>" —— 真正运行该技能在当前系统上的命令模板
     const skillRun = text.match(/^(?:执行技能|运行技能|run skill)[:：\s]+(.+)$/i);
     if (skillRun) {
@@ -587,4 +623,10 @@ class AetherClawAgent {
   }
 }
 
-module.exports = new AetherClawAgent();
+const agentInstance = new AetherClawAgent();
+scheduler.bind({
+  runner: (sched) => agentInstance.run(sched.prompt),
+  notifier: (msg) => config.sendWebhookNotification(msg)
+});
+
+module.exports = agentInstance;

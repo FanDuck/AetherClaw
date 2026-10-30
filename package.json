@@ -1,6 +1,6 @@
 {
   "name": "aetherclaw",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "AetherClaw (灵爪) - A Cross-Platform (Windows & Linux) Self-Evolving Autonomous AI Agent Framework inspired by OpenClaw & Hermes.",
   "main": "src/index.js",
   "bin": {

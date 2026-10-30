@@ -15,6 +15,7 @@ const crypto = require('crypto');
 const platform = require('../core/platform');
 const config = require('../core/config');
 const memory = require('../core/memory');
+const scheduler = require('../core/scheduler');
 const agent = require('../core/agent');
 const { TOOLS } = require('../tools');
 const pkg = require('../../package.json');
@@ -195,6 +196,8 @@ function createServer(opts = {}) {
           memories: memory.state.semanticMemories,
           episodes: memory.state.episodicHistory.slice(0, 15),
           skills: memory.listSkills(),
+          skillGallery: memory.getSkillGallery(),
+          schedules: scheduler.list(),
           tools: Object.values(TOOLS).map(t => ({ name: t.name, description: t.description }))
         });
       }
@@ -242,6 +245,19 @@ function createServer(opts = {}) {
       if (req.method === 'DELETE' && pathname.startsWith('/api/config/profiles/')) {
         const id = safeDecode(pathname.replace('/api/config/profiles/', ''));
         return sendJson(res, 200, { success: true, config: config.deleteProfile(id) });
+      }
+
+      if (req.method === 'POST' && pathname === '/api/config/webhook/test') {
+        const body = await parseBody(req);
+        if (typeof body.webhookUrl === 'string' && body.save === true) {
+          config.update({ webhookUrl: body.webhookUrl });
+        }
+        const result = await config.sendWebhookNotification({
+          title: body.title || 'AetherClaw 连通性测试',
+          content: body.content || `这是一条来自 AetherClaw (灵爪) 的测试推送消息。\n当前时间: ${new Date().toLocaleString('zh-CN')}`,
+          webhookUrl: body.webhookUrl
+        });
+        return sendJson(res, 200, { ...result, config: config.getSafeConfig() });
       }
 
       // Plain JSON chat
@@ -355,6 +371,21 @@ function createServer(opts = {}) {
         return sendJson(res, 200, { success: true, skill, skills: memory.listSkills() });
       }
 
+      if (req.method === 'GET' && pathname === '/api/skills/gallery') {
+        return sendJson(res, 200, { gallery: memory.getSkillGallery() });
+      }
+
+      if (req.method === 'POST' && pathname === '/api/skills/gallery/install') {
+        const body = await parseBody(req);
+        const skill = memory.installGallerySkill(body.id);
+        return sendJson(res, 200, {
+          success: true,
+          skill,
+          skills: memory.listSkills(),
+          skillGallery: memory.getSkillGallery()
+        });
+      }
+
       if (req.method === 'GET' && /^\/api\/skills\/[^/]+\/md$/.test(pathname)) {
         const id = safeDecode(pathname.replace(/^\/api\/skills\/|\/md$/g, ''));
         const exported = memory.getSkillMarkdown(id);
@@ -372,7 +403,81 @@ function createServer(opts = {}) {
       if (req.method === 'DELETE' && pathname.startsWith('/api/skills/')) {
         const id = safeDecode(pathname.replace('/api/skills/', ''));
         const removed = memory.deleteSkill(id);
-        return sendJson(res, 200, { success: removed, skills: memory.listSkills() });
+        return sendJson(res, 200, {
+          success: removed,
+          skills: memory.listSkills(),
+          skillGallery: memory.getSkillGallery()
+        });
+      }
+
+      // ---- Scheduled Autonomous Tasks ----
+      if (req.method === 'GET' && pathname === '/api/schedules') {
+        return sendJson(res, 200, { schedules: scheduler.list() });
+      }
+
+      if (req.method === 'POST' && pathname === '/api/schedules') {
+        const body = await parseBody(req);
+        const schedule = scheduler.createOrUpdate(body);
+        return sendJson(res, 200, { success: true, schedule, schedules: scheduler.list() });
+      }
+
+      if (req.method === 'POST' && /^\/api\/schedules\/[^/]+\/toggle$/.test(pathname)) {
+        const id = safeDecode(pathname.replace(/^\/api\/schedules\/|\/toggle$/g, ''));
+        const body = await parseBody(req);
+        const schedule = scheduler.toggle(id, body.enabled);
+        return sendJson(res, 200, { success: true, schedule, schedules: scheduler.list() });
+      }
+
+      if (req.method === 'POST' && /^\/api\/schedules\/[^/]+\/run$/.test(pathname)) {
+        const id = safeDecode(pathname.replace(/^\/api\/schedules\/|\/run$/g, ''));
+        busy++;
+        try {
+          const schedule = await scheduler.runNow(id);
+          return sendJson(res, 200, {
+            success: true,
+            schedule,
+            schedules: scheduler.list(),
+            episodes: memory.state.episodicHistory.slice(0, 15)
+          });
+        } finally {
+          busy--;
+        }
+      }
+
+      if (req.method === 'DELETE' && pathname.startsWith('/api/schedules/')) {
+        const id = safeDecode(pathname.replace('/api/schedules/', ''));
+        const removed = scheduler.remove(id);
+        return sendJson(res, 200, { success: removed, schedules: scheduler.list() });
+      }
+
+      // ---- Full Backup & Restore ----
+      if (req.method === 'GET' && pathname === '/api/backup') {
+        const bundle = memory.exportBackup(scheduler.list());
+        if (urlObj.searchParams.get('download') === '1') {
+          const dateStr = new Date().toISOString().slice(0, 10);
+          res.writeHead(200, securityHeaders({
+            'Content-Type': 'application/json; charset=utf-8',
+            'Content-Disposition': `attachment; filename="aetherclaw-backup-${dateStr}.json"`
+          }));
+          return res.end(JSON.stringify(bundle, null, 2));
+        }
+        return sendJson(res, 200, bundle);
+      }
+
+      if (req.method === 'POST' && pathname === '/api/backup/restore') {
+        const body = await parseBody(req);
+        const { memoriesAdded, skillsImported } = memory.importBackup(body);
+        const schedulesImported = scheduler.importSchedules(body.schedules || []);
+        return sendJson(res, 200, {
+          success: true,
+          memoriesAdded,
+          skillsImported,
+          schedulesImported,
+          memories: memory.state.semanticMemories,
+          skills: memory.listSkills(),
+          skillGallery: memory.getSkillGallery(),
+          schedules: scheduler.list()
+        });
       }
 
       return sendJson(res, 404, { error: `Not found: ${pathname}` });
@@ -429,12 +534,14 @@ function startWebServer({ openBrowser = false } = {}) {
         console.log(`   Token: ${token}`);
       }
       console.log(`============================================================\n`);
+      scheduler.start();
       if (openBrowser) platform.openBrowser(url);
       resolve({ server, url, token, listenHost });
     });
 
     const shutdown = () => {
       console.log('\n👋 Shutting down AetherClaw...');
+      scheduler.stop();
       server.close(() => process.exit(0));
       setTimeout(() => process.exit(0), 1500).unref();
     };

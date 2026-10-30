@@ -71,6 +71,108 @@ const BUILTIN_SKILLS = [
 ];
 
 /**
+ * 内置精选跨平台技能模板市场（支持在 Web 控制台一键安装至本地 skills/ 库）
+ */
+const SKILL_GALLERY = [
+  {
+    id: 'port_scanner',
+    name: '端口监听与占用排查 (Port & Listener Inspector)',
+    category: '网络与运维',
+    description: '一键列出本机当前所有处于监听 (LISTEN) 状态的 TCP 端口及对应的进程 ID，快速定位端口冲突。',
+    triggerKeywords: ['端口', '监听', '端口占用', 'port', 'listen', 'netstat'],
+    steps: [
+      '检测当前运行环境是 Windows PowerShell 还是 Linux Bash',
+      '查询所有处于 Listen 状态的 TCP 端口与所属进程 PID',
+      '汇总端口占用清单并提示如何释放冲突端口'
+    ],
+    commandTemplate: {
+      win32: 'Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Select-Object -First 20 LocalAddress, LocalPort, OwningProcess | Sort-Object LocalPort | Format-Table -AutoSize',
+      linux: 'ss -tulpn 2>/dev/null | head -n 25 || netstat -tulpn 2>/dev/null | head -n 25'
+    }
+  },
+  {
+    id: 'top_processes',
+    name: '高占用进程排行排查 (Top CPU/RAM Process Hunter)',
+    category: '系统诊断',
+    description: '按 CPU 与内存消耗排序列出前 10 个高负载进程，帮助快速发现系统卡顿元凶。',
+    triggerKeywords: ['高占用', '进程', '卡顿', '内存占用', 'top', 'process', 'cpu'],
+    steps: [
+      '获取当前系统的进程列表并按 CPU/内存排序',
+      '截取排名前 10 的进程详情（名称、PID、CPU、内存 MB）',
+      '分析是否存在异常高占用进程并给出优化建议'
+    ],
+    commandTemplate: {
+      win32: 'Get-Process | Sort-Object WorkingSet64 -Descending | Select-Object -First 10 Name, Id, CPU, @{Name="Memory(MB)";Expression={[math]::round($_.WorkingSet64/1MB,1)}} | Format-Table -AutoSize',
+      linux: 'ps aux --sort=-%mem | head -n 11'
+    }
+  },
+  {
+    id: 'net_diagnostics',
+    name: '网络连通性与 DNS 诊断 (Network & DNS Diagnostics)',
+    category: '网络与运维',
+    description: '检测本机网卡 IP 配置、网关连通性以及公共 DNS 解析状态，排查断网或访问慢问题。',
+    triggerKeywords: ['网络诊断', '断网', '网卡', 'dns', 'ping', 'network'],
+    steps: [
+      '查看本机活动的 IPv4 网络接口配置',
+      '测试公共 DNS 或网关连通状态',
+      '输出网络健康度与 DNS 解析诊断结论'
+    ],
+    commandTemplate: {
+      win32: 'Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -ne "127.0.0.1" } | Select-Object InterfaceAlias, IPAddress, PrefixLength | Format-Table -AutoSize',
+      linux: 'ip -brief addr show 2>/dev/null || ifconfig -a'
+    }
+  },
+  {
+    id: 'large_file_finder',
+    name: '大文件扫描与空间清理分析 (Large File Scanner)',
+    category: '磁盘与文件',
+    description: '递归扫描当前工作目录，找出体积最大的前 15 个文件并按 MB/KB 展示，辅助清理磁盘空间。',
+    triggerKeywords: ['大文件', '清理磁盘', '空间占用', 'large files', 'disk usage'],
+    steps: [
+      '递归扫描当前目录下的所有文件（排除 node_modules/.git）',
+      '按文件体积从大到小排序并取前 15 项',
+      '生成大文件分布清单与安全清理建议'
+    ],
+    commandTemplate: {
+      win32: 'Get-ChildItem -Path . -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notmatch "node_modules|\\\\.git" } | Sort-Object Length -Descending | Select-Object -First 15 @{Name="Size(KB)";Expression={[math]::round($_.Length/1KB,1)}}, FullName | Format-Table -AutoSize',
+      linux: 'find . -type f -not -path "*/node_modules/*" -not -path "*/.git/*" -exec ls -lh {} + 2>/dev/null | sort -k5 -hr | head -n 15'
+    }
+  },
+  {
+    id: 'git_inspector',
+    name: 'Git 仓库状态与提交巡检 (Git Repo Inspector)',
+    category: '开发助手',
+    description: '一键查看当前 Git 仓库的分支状态、未提交变更以及最近 5 条提交记录。',
+    triggerKeywords: ['git', '仓库状态', '提交记录', '分支', 'commit'],
+    steps: [
+      '检查当前目录是否为 Git 仓库并读取分支与未提交变更',
+      '提取最近 5 次提交的精简日志',
+      '汇总仓库工作区整洁度与近期改动概览'
+    ],
+    commandTemplate: {
+      win32: 'git status -sb; Write-Output "--- Recent Commits ---"; git log -n 5 --oneline',
+      linux: 'git status -sb && echo "--- Recent Commits ---" && git log -n 5 --oneline'
+    }
+  },
+  {
+    id: 'docker_inspector',
+    name: 'Docker 容器与资源状态巡检 (Docker Container Inspector)',
+    category: '容器与云原生',
+    description: '检查本机 Docker 守护进程状态、正在运行的容器列表及端口映射情况。',
+    triggerKeywords: ['docker', '容器状态', '镜像', 'container'],
+    steps: [
+      '检查 Docker CLI 与守护进程是否可用',
+      '列出当前运行中及最近退出的容器状态与端口映射',
+      '输出容器健康摘要'
+    ],
+    commandTemplate: {
+      win32: 'docker ps -a --format "table {{.Names}}\\t{{.Image}}\\t{{.Status}}\\t{{.Ports}}"',
+      linux: 'docker ps -a --format "table {{.Names}}\\t{{.Image}}\\t{{.Status}}\\t{{.Ports}}"'
+    }
+  }
+];
+
+/**
  * 中英文混合分词：英文/数字按词（≥2 字符），连续中文拆成相邻二字词（bigram）。
  * 零依赖，足以让「我喜欢简洁的中文报告」命中「偏好结构化中文技术汇报」。
  */
@@ -452,7 +554,95 @@ class MemoryAndSkillEngine {
       }
     });
   }
+
+  /**
+   * 获取内置精选技能模板市场列表，并标记每个模板是否已安装
+   */
+  getSkillGallery() {
+    const installedIds = new Set(this.listSkills().map(s => s.id));
+    return SKILL_GALLERY.map(item => ({
+      ...item,
+      installed: installedIds.has(item.id)
+    }));
+  }
+
+  /**
+   * 从内置技能模板市场一键安装指定技能
+   */
+  installGallerySkill(id) {
+    const tpl = SKILL_GALLERY.find(item => item.id === id);
+    if (!tpl) {
+      throw Object.assign(new Error(`未找到技能模板: ${id}`), { status: 404 });
+    }
+    return this.createOrUpdateSkill({
+      id: tpl.id,
+      name: tpl.name,
+      description: tpl.description,
+      triggerKeywords: tpl.triggerKeywords,
+      steps: tpl.steps,
+      commandTemplate: tpl.commandTemplate
+    });
+  }
+
+  /**
+   * 导出全量知识与技能备份包（包含语义记忆、历史轨迹、自定义/已安装技能、定时任务）
+   */
+  exportBackup(schedules = []) {
+    return {
+      schema: 'aetherclaw-backup/v1',
+      exportedAt: new Date().toISOString(),
+      semanticMemories: this.state.semanticMemories,
+      episodicHistory: this.state.episodicHistory,
+      skills: this.listSkills(),
+      schedules: Array.isArray(schedules) ? schedules : []
+    };
+  }
+
+  /**
+   * 从全量备份包恢复语义记忆与技能（保留已有数据并按 ID 合并去重）
+   */
+  importBackup(bundle = {}) {
+    if (!bundle || typeof bundle !== 'object') {
+      throw Object.assign(new Error('无效的备份文件格式'), { status: 400 });
+    }
+    let memoriesAdded = 0;
+    let skillsImported = 0;
+
+    if (Array.isArray(bundle.semanticMemories)) {
+      const existingContents = new Set(this.state.semanticMemories.map(m => m.content));
+      for (const mem of bundle.semanticMemories) {
+        if (!mem || typeof mem.content !== 'string' || !mem.content.trim()) continue;
+        if (!existingContents.has(mem.content.trim())) {
+          this.addMemory({
+            content: mem.content,
+            category: mem.category || 'knowledge',
+            tags: Array.isArray(mem.tags) ? mem.tags : []
+          });
+          existingContents.add(mem.content.trim());
+          memoriesAdded++;
+        }
+      }
+    }
+
+    if (Array.isArray(bundle.skills)) {
+      for (const sk of bundle.skills) {
+        if (!sk || (!sk.id && !sk.name)) continue;
+        this.createOrUpdateSkill({
+          id: sk.id,
+          name: sk.name,
+          description: sk.description,
+          triggerKeywords: sk.triggerKeywords || [],
+          steps: sk.steps || [],
+          commandTemplate: sk.commandTemplate || {}
+        });
+        skillsImported++;
+      }
+    }
+
+    return { memoriesAdded, skillsImported };
+  }
 }
 
 module.exports = new MemoryAndSkillEngine();
 module.exports.tokenize = tokenize;
+module.exports.SKILL_GALLERY = SKILL_GALLERY;

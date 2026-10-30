@@ -157,11 +157,11 @@
     .composer textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(56,189,248,.15); }
 
     .inspector { display: flex; flex-direction: column; min-height: 0; background: var(--panel); backdrop-filter: blur(14px); }
-    .tabs { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 1px solid var(--border); }
-    .tab { padding: 13px 6px; text-align: center; font-size: 12.5px; font-weight: 600; color: var(--muted); cursor: pointer; transition: color .2s; }
+    .tabs { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid var(--border); }
+    .tab { padding: 13px 4px; text-align: center; font-size: 12px; font-weight: 600; color: var(--muted); cursor: pointer; transition: color .2s; white-space: nowrap; }
     .tab:hover { color: var(--text); }
     .tab.active { color: var(--accent); }
-    .tab-ind { position: absolute; bottom: 0; left: 0; height: 2px; width: 33.333%; background: var(--grad); transition: transform .35s var(--ease); }
+    .tab-ind { position: absolute; bottom: 0; left: 0; height: 2px; width: 25%; background: var(--grad); transition: transform .35s var(--ease); }
     .tab-content { flex: 1; overflow-y: auto; padding: 16px; display: none; flex-direction: column; gap: 11px; }
     .tab-content.active { display: flex; animation: rise .35s var(--ease) both; }
 
@@ -261,14 +261,23 @@
       <div class="tabs" id="tabs">
         <div class="tab active" data-tab="skills">🧬 技能库</div>
         <div class="tab" data-tab="memories">🧠 记忆</div>
+        <div class="tab" data-tab="auto">⏰ 自动化</div>
         <div class="tab" data-tab="system">🛠️ 系统</div>
         <div class="tab-ind" id="tabInd"></div>
       </div>
       <div class="tab-content active" id="tab-skills">
-        <div style="display:flex;gap:6px;justify-content:space-between;align-items:center;">
-          <button class="btn btn-primary btn-sm" id="newSkillBtn">➕ 新建/编辑技能</button>
-          <button class="btn btn-sm" id="importSkillBtn">📤 导入 SKILL.md</button>
+        <div style="display:flex;gap:5px;justify-content:space-between;align-items:center;flex-wrap:wrap;">
+          <button class="btn btn-primary btn-sm" id="newSkillBtn">➕ 新建/编辑</button>
+          <button class="btn btn-sm" id="toggleGalleryBtn" style="border-color:rgba(56,189,248,.45);color:var(--accent);">🏪 模板市场</button>
+          <button class="btn btn-sm" id="importSkillBtn">📤 导入 .md</button>
           <input type="file" id="skillFileInput" accept=".md,.markdown,.txt" style="display:none" />
+        </div>
+        <div id="skillGalleryDrawer" style="display:none;flex-direction:column;gap:8px;padding:10px;border-radius:10px;background:rgba(2,6,23,.65);border:1px solid rgba(56,189,248,.35);">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:12px;font-weight:700;color:var(--accent);">🏪 内置精选跨平台技能模板（一键安装）</span>
+            <button class="btn btn-sm" id="closeGalleryBtn" style="padding:2px 6px;font-size:11px;">收起</button>
+          </div>
+          <div id="galleryList" style="display:flex;flex-direction:column;gap:7px;"></div>
         </div>
         <div id="skillsList" style="display:flex;flex-direction:column;gap:10px;"></div>
       </div>
@@ -278,6 +287,37 @@
           <button class="btn btn-primary btn-sm" id="addMemBtn">添加</button>
         </div>
         <div id="memoriesList" style="display:flex;flex-direction:column;gap:10px;"></div>
+      </div>
+      <div class="tab-content" id="tab-auto">
+        <!-- Scheduled Autonomous Tasks -->
+        <div class="card" style="padding:11px;">
+          <div class="card-title" style="margin-bottom:8px;font-size:13px;">⏰ 新增后台定时巡检 / 自动化任务</div>
+          <div style="display:flex;flex-direction:column;gap:7px;">
+            <input id="schedNameInput" placeholder="任务名称（例：每小时系统健康巡检）" style="padding:7px 9px;border-radius:8px;border:1px solid var(--border);background:rgba(15,23,42,.85);color:#fff;font-size:12px;outline:none;" />
+            <input id="schedPromptInput" placeholder="定时执行的 Agent 指令（例：执行一次完整的跨平台系统健康巡检）" style="padding:7px 9px;border-radius:8px;border:1px solid var(--border);background:rgba(15,23,42,.85);color:#fff;font-size:12px;outline:none;" />
+            <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;">
+              <label style="font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:4px;">每 <input type="number" id="schedIntervalInput" min="1" max="10080" value="60" style="width:58px;padding:4px 6px;border-radius:6px;border:1px solid var(--border);background:rgba(15,23,42,.9);color:#fff;font-size:12px;" /> 分钟</label>
+              <label style="font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="schedNotifyCheck" /> 完成后推送 Webhook</label>
+              <button class="btn btn-primary btn-sm" id="addSchedBtn">➕ 添加定时</button>
+            </div>
+          </div>
+        </div>
+        <div id="schedulesList" style="display:flex;flex-direction:column;gap:8px;"></div>
+
+        <!-- Full Backup & Restore -->
+        <div class="card" style="padding:11px;">
+          <div class="card-title" style="margin-bottom:6px;font-size:13px;">📦 全量数据备份与迁移（记忆 + 技能 + 定时任务）</div>
+          <div class="card-desc" style="margin-bottom:8px;">一键导出或恢复您的全部长期记忆、自定义技能与定时任务。</div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-sm" id="exportBackupBtn" style="flex:1;border-color:rgba(56,189,248,.4);color:var(--accent);">📥 导出全量备份 (.json)</button>
+            <button class="btn btn-sm" id="importBackupBtn" style="flex:1;">📤 导入恢复备份</button>
+            <input type="file" id="backupFileInput" accept=".json" style="display:none" />
+          </div>
+        </div>
+
+        <!-- Episodic History -->
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;">📜 近期任务执行轨迹 (点击可重放)</div>
+        <div id="episodesList" style="display:flex;flex-direction:column;gap:7px;"></div>
       </div>
       <div class="tab-content" id="tab-system">
         <div class="card" id="sysCard"></div>
@@ -363,6 +403,13 @@
             <option value="docker">受限 Docker 容器沙箱 (--cap-drop=ALL --read-only --network=none)</option>
             <option value="gvisor">gVisor (runsc) 内核级强隔离沙箱 (--runtime=runsc)</option>
           </select>
+        </div>
+        <div style="margin-top:10px;">
+          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:5px;">🔔 Webhook 消息推送地址 (支持飞书 / 钉钉 / 企业微信 / Bark / 自定义 JSON Webhook)：</label>
+          <div style="display:flex;gap:8px;">
+            <input id="cfgWebhookUrl" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/... 或钉钉/企微机器人地址" style="flex:1;padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(30,41,59,.85);color:var(--text);font-size:12.5px;outline:none;" />
+            <button type="button" class="btn btn-sm" id="testWebhookBtn" style="white-space:nowrap;border-color:rgba(52,211,153,.45);color:var(--green);">🔔 测试推送</button>
+          </div>
         </div>
       </div>
 
@@ -523,13 +570,27 @@
     }
 
     function render() {
-      const { system, config, skills = [], memories = [], tools = [], version } = state;
+      const { system, config, skills = [], skillGallery = [], memories = [], schedules = [], episodes = [], tools = [], version } = state;
       if (!system) return;
       const isLocalUrl = /(^|\/\/)(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(config.baseUrl || '');
       $('#osBadge').innerHTML = `<span class="dot"></span><span>${esc(system.osType)} · ${esc(system.shell)}</span>`;
       $('#modeBadge').innerHTML = config.hasApiKey
         ? `<span>🟢 ${esc(config.model)} (${esc(config.apiKeyMasked)})</span>`
         : (isLocalUrl ? `<span>🟢 本地模型 ${esc(config.model)}</span>` : `<span>⚡ 免 Key 本地模式</span>`);
+
+      const gList = $('#galleryList');
+      if (gList) {
+        gList.innerHTML = skillGallery.map(g => `
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 9px;border-radius:8px;background:rgba(15,23,42,.85);border:1px solid var(--border);">
+            <div style="min-width:0;flex:1;">
+              <div style="font-size:12px;font-weight:700;color:#f1f5f9;">${esc(g.name)} <span class="tag" style="margin:0;">${esc(g.category || '工具')}</span></div>
+              <div style="font-size:11px;color:var(--muted);line-height:1.4;margin-top:2px;">${esc(g.description)}</div>
+            </div>
+            ${g.installed
+              ? `<span class="tag" style="background:rgba(52,211,153,.15);color:var(--green);margin:0;flex-shrink:0;">✅ 已安装</span>`
+              : `<button class="btn btn-sm" data-install-gallery="${esc(g.id)}" style="border-color:rgba(56,189,248,.45);color:var(--accent);flex-shrink:0;">＋ 安装</button>`}
+          </div>`).join('');
+      }
 
       const builtins = new Set(['sys_health_check', 'workspace_organizer']);
       $('#skillsList').innerHTML = skills.length ? skills.map((s, i) => `
@@ -552,6 +613,40 @@
           <div class="card-head"><span class="tag" style="margin:0">${esc(m.category)}</span><button class="btn btn-sm" data-del="${esc(m.id)}">删除</button></div>
           <div class="card-desc" style="color:var(--text)">${esc(m.content)}</div>
         </div>`).join('') : '<div class="empty">记忆库为空</div>';
+
+      const sList = $('#schedulesList');
+      if (sList) {
+        sList.innerHTML = schedules.length ? schedules.map(sc => `
+          <div class="card" style="padding:10px 11px;">
+            <div class="card-head">
+              <span class="card-title" style="font-size:12.5px;">⏰ ${esc(sc.name)}</span>
+              <div style="display:flex;gap:4px;align-items:center;">
+                <button class="btn btn-sm" data-run-sched="${esc(sc.id)}" title="立即执行一次">▶ 运行</button>
+                <button class="btn btn-sm" data-toggle-sched="${esc(sc.id)}" title="暂停或启用">${sc.enabled ? '⏸ 暂停' : '▶ 启用'}</button>
+                <button class="btn btn-sm" data-del-sched="${esc(sc.id)}" title="删除定时任务" style="color:var(--red);">🗑️</button>
+              </div>
+            </div>
+            <div class="card-desc" style="color:var(--text);margin-bottom:4px;">指令：<code>${esc(sc.prompt)}</code></div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:11px;color:var(--muted);">
+              <span class="tag" style="margin:0;background:${sc.enabled ? 'rgba(52,211,153,.15)' : 'rgba(148,163,184,.15)'};color:${sc.enabled ? 'var(--green)' : 'var(--muted)'};">${sc.enabled ? `🟢 每 ${sc.intervalMinutes} 分钟` : '⏸ 已暂停'}</span>
+              <span>已运行 ${sc.runCount || 0} 次</span>
+              ${sc.notifyOnComplete ? `<span class="tag" style="margin:0;">🔔 Webhook推送</span>` : ''}
+            </div>
+            ${sc.lastResultPreview ? `<div style="margin-top:6px;padding:6px 8px;border-radius:6px;background:rgba(2,6,23,.55);font-size:11px;color:var(--muted);max-height:60px;overflow:auto;">最近结果: ${esc(sc.lastResultPreview.slice(0, 140))}</div>` : ''}
+          </div>`).join('') : '<div class="empty" style="padding:12px 0;">暂无定时任务，可在上方添加（如定时系统巡检）</div>';
+      }
+
+      const epList = $('#episodesList');
+      if (epList) {
+        epList.innerHTML = episodes.length ? episodes.slice(0, 8).map(ep => `
+          <div class="card" style="padding:8px 10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;">
+              <span style="font-size:12px;font-weight:600;color:#e2e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">💬 ${esc(ep.userPrompt)}</span>
+              <button class="chip" data-prompt="${esc(ep.userPrompt)}" style="padding:2px 8px;font-size:11px;flex-shrink:0;">↻ 重放</button>
+            </div>
+            <div style="font-size:11px;color:var(--muted);margin-top:3px;">调用工具: ${(ep.toolsUsed && ep.toolsUsed.length) ? esc(ep.toolsUsed.join(' → ')) : '直接回复'}</div>
+          </div>`).join('') : '<div class="empty" style="padding:10px 0;">暂无历史轨迹</div>';
+      }
 
       const sbxLabel = { host: '宿主机护栏 (Host)', docker: '受限 Docker 容器', gvisor: 'gVisor (runsc) 内核沙箱' }[config.sandboxMode || 'host'] || 'Host';
       $('#sysCard').innerHTML = `
@@ -755,6 +850,7 @@
       $('#cfgAutoEvolve').checked = c.autoEvolveSkills !== false;
       $('#cfgMaxSteps').value = c.maxSteps || 8;
       $('#cfgSandboxMode').value = c.sandboxMode || 'host';
+      $('#cfgWebhookUrl').value = c.webhookUrl || '';
       $('#connTestResult').style.display = 'none';
       $('#fetchedModelsBox').style.display = 'none';
       renderSettingsVault();
@@ -820,7 +916,36 @@
       if (delSk) {
         const r = await (await api('/api/skills/' + encodeURIComponent(delSk.dataset.delSkill), { method: 'DELETE' })).json();
         if (r.error) return toast(r.error, true);
-        state.skills = r.skills; render(); return toast('🗑️ 技能已删除');
+        state.skills = r.skills; if (r.skillGallery) state.skillGallery = r.skillGallery; render(); return toast('🗑️ 技能已删除');
+      }
+      const instGal = t.closest('[data-install-gallery]');
+      if (instGal) {
+        const r = await (await api('/api/skills/gallery/install', { method: 'POST', body: JSON.stringify({ id: instGal.dataset.installGallery }) })).json();
+        if (r.error) return toast(r.error, true);
+        state.skills = r.skills; state.skillGallery = r.skillGallery; render();
+        return toast('🧬 已安装技能：' + r.skill.name);
+      }
+      const runSc = t.closest('[data-run-sched]');
+      if (runSc) {
+        toast('⏳ 正在后台执行定时任务…');
+        const r = await (await api('/api/schedules/' + encodeURIComponent(runSc.dataset.runSched) + '/run', { method: 'POST' })).json();
+        if (r.error) return toast(r.error, true);
+        state.schedules = r.schedules; if (r.episodes) state.episodes = r.episodes; render();
+        return toast('✅ 定时任务已执行完毕');
+      }
+      const togSc = t.closest('[data-toggle-sched]');
+      if (togSc) {
+        const r = await (await api('/api/schedules/' + encodeURIComponent(togSc.dataset.toggleSched) + '/toggle', { method: 'POST', body: '{}' })).json();
+        if (r.error) return toast(r.error, true);
+        state.schedules = r.schedules; render();
+        return toast(r.schedule.enabled ? '⏰ 定时任务已启用' : '⏸ 定时任务已暂停');
+      }
+      const delSc = t.closest('[data-del-sched]');
+      if (delSc) {
+        const r = await (await api('/api/schedules/' + encodeURIComponent(delSc.dataset.delSched), { method: 'DELETE' })).json();
+        if (r.error) return toast(r.error, true);
+        state.schedules = r.schedules; render();
+        return toast('🗑️ 定时任务已删除');
       }
       const preset = t.closest('[data-preset]');
       if (preset) {
@@ -927,6 +1052,63 @@
       }
     };
     $('#newSkillBtn').onclick = () => openSkillEditor(null); $('#cancelSkill').onclick = closeSkillEditor;
+    $('#toggleGalleryBtn').onclick = () => {
+      const dr = $('#skillGalleryDrawer');
+      dr.style.display = dr.style.display === 'none' ? 'flex' : 'none';
+    };
+    $('#closeGalleryBtn').onclick = () => { $('#skillGalleryDrawer').style.display = 'none'; };
+    $('#addSchedBtn').onclick = async () => {
+      const prompt = $('#schedPromptInput').value.trim();
+      if (!prompt) return toast('请填写定时执行的 Agent 指令', true);
+      const body = {
+        name: $('#schedNameInput').value.trim() || prompt.slice(0, 24),
+        prompt,
+        intervalMinutes: Number($('#schedIntervalInput').value) || 60,
+        notifyOnComplete: $('#schedNotifyCheck').checked,
+        enabled: true
+      };
+      const r = await (await api('/api/schedules', { method: 'POST', body: JSON.stringify(body) })).json();
+      if (r.error) return toast(r.error, true);
+      $('#schedNameInput').value = ''; $('#schedPromptInput').value = '';
+      state.schedules = r.schedules; render();
+      toast('⏰ 定时自动化任务已添加');
+    };
+    $('#exportBackupBtn').onclick = async () => {
+      const r = await (await api('/api/backup')).json();
+      if (r.error) return toast(r.error, true);
+      const blob = new Blob([JSON.stringify(r, null, 2)], { type: 'application/json;charset=utf-8' });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `aetherclaw-backup-${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(a.href);
+      toast('📥 全量备份已导出');
+    };
+    $('#importBackupBtn').onclick = () => $('#backupFileInput').click();
+    $('#backupFileInput').onchange = async (e) => {
+      const f = e.target.files && e.target.files[0]; if (!f) return;
+      try {
+        const bundle = JSON.parse(await f.text()); e.target.value = '';
+        const r = await (await api('/api/backup/restore', { method: 'POST', body: JSON.stringify(bundle) })).json();
+        if (r.error) return toast('恢复失败：' + r.error, true);
+        Object.assign(state, { memories: r.memories, skills: r.skills, skillGallery: r.skillGallery, schedules: r.schedules });
+        render();
+        toast(`✅ 已恢复 ${r.memoriesAdded} 条记忆、${r.skillsImported} 个技能、${r.schedulesImported} 个定时任务`);
+      } catch (err) {
+        toast('备份文件格式错误：' + err.message, true);
+      }
+    };
+    $('#testWebhookBtn').onclick = async () => {
+      const wUrl = $('#cfgWebhookUrl').value.trim();
+      if (!wUrl) return toast('请先填入 Webhook 地址', true);
+      const btn = $('#testWebhookBtn'); btn.disabled = true; btn.textContent = '⏳ 推送中…';
+      try {
+        const r = await (await api('/api/config/webhook/test', { method: 'POST', body: JSON.stringify({ webhookUrl: wUrl, save: true }) })).json();
+        if (r.config) state.config = r.config;
+        showTestBanner(r.diagnosis || (r.ok ? '✅ Webhook 推送成功' : '❌ Webhook 推送失败'), Boolean(r.ok));
+        toast(r.ok ? '🔔 测试通知已送达' : '❌ Webhook 推送失败', !r.ok);
+      } catch (err) {
+        toast('Webhook 测试失败：' + err.message, true);
+      } finally {
+        btn.disabled = false; btn.textContent = '🔔 测试推送';
+      }
+    };
     $('#saveSkill').onclick = async () => {
       const name = $('#skName').value.trim();
       if (!name) return toast('请填写技能名称', true);
@@ -975,6 +1157,7 @@
         allowFileWrite: $('#cfgAllowWrite').checked,
         autoEvolveSkills: $('#cfgAutoEvolve').checked,
         sandboxMode: $('#cfgSandboxMode').value,
+        webhookUrl: $('#cfgWebhookUrl').value.trim(),
         maxSteps: Number($('#cfgMaxSteps').value) || 8
       };
       const r = await (await api('/api/config', { method: 'POST', body: JSON.stringify(body) })).json();

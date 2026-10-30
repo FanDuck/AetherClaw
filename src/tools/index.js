@@ -411,6 +411,45 @@ const TOOLS = {
         skill: created
       };
     }
+  },
+
+  notify_send: {
+    name: 'notify_send',
+    description: 'Send a notification or alert message to Feishu (飞书), DingTalk (钉钉), WeCom (企业微信), Bark, or a custom Webhook URL.',
+    parameters: {
+      type: 'object',
+      properties: {
+        title: {
+          type: 'string',
+          description: 'Short notification title (e.g., "系统健康巡检报告").'
+        },
+        message: {
+          type: 'string',
+          description: 'Detailed message body to send.'
+        },
+        webhookUrl: {
+          type: 'string',
+          description: 'Optional override Webhook URL (defaults to the configured Webhook in AetherClaw settings).'
+        }
+      },
+      required: ['message']
+    },
+    async execute({ title = 'AetherClaw 通知', message = '', webhookUrl }) {
+      const res = await config.sendWebhookNotification({
+        title,
+        content: message,
+        webhookUrl
+      });
+      if (!res.ok) {
+        return { error: res.diagnosis, status: res.status };
+      }
+      return {
+        success: true,
+        channel: res.channel,
+        latencyMs: res.latencyMs,
+        message: res.diagnosis
+      };
+    }
   }
 };
 

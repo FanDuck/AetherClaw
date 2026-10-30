@@ -596,3 +596,157 @@ test('25. Runtime enforcement of autoEvolveSkills=false and full 9-tool coverage
   const recallRes = await agent.run('查看记忆');
   assert.match(recallRes.finalAnswer, /Hermes 长期记忆检索结果/);
 });
+
+test('26. Built-in Skill Template Gallery: list gallery templates and 1-click install via REST API', async () => {
+  const server = createServer({});
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const { port } = server.address();
+  const host = `127.0.0.1:${port}`;
+  try {
+    const galRes = await request(port, { path: '/api/skills/gallery', headers: { Host: host } });
+    assert.equal(galRes.status, 200);
+    const { gallery } = JSON.parse(galRes.body);
+    assert.ok(Array.isArray(gallery) && gallery.length >= 6);
+    assert.ok(gallery.some(g => g.id === 'port_scanner'));
+
+    const instRes = await request(port, {
+      method: 'POST',
+      path: '/api/skills/gallery/install',
+      headers: { Host: host, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: 'port_scanner' })
+    });
+    assert.equal(instRes.status, 200);
+    const instJson = JSON.parse(instRes.body);
+    assert.equal(instJson.skill.id, 'port_scanner');
+    assert.ok(instJson.skillGallery.find(g => g.id === 'port_scanner').installed);
+
+    // Clean up installed gallery skill
+    memory.deleteSkill('port_scanner');
+  } finally {
+    server.close();
+  }
+});
+
+test('27. Autonomous Task Scheduler: create, toggle, runNow, natural-language schedule creation, and delete', async () => {
+  const server = createServer({});
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const { port } = server.address();
+  const host = `127.0.0.1:${port}`;
+  try {
+    const createRes = await request(port, {
+      method: 'POST',
+      path: '/api/schedules',
+      headers: { Host: host, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: '测试定时目录扫描', prompt: '分析当前目录的文件结构', intervalMinutes: 30 })
+    });
+    assert.equal(createRes.status, 200);
+    const created = JSON.parse(createRes.body).schedule;
+    assert.ok(created.id.startsWith('sched_'));
+    assert.equal(created.enabled, true);
+
+    const toggleRes = await request(port, {
+      method: 'POST',
+      path: `/api/schedules/${created.id}/toggle`,
+      headers: { Host: host, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: false })
+    });
+    assert.equal(JSON.parse(toggleRes.body).schedule.enabled, false);
+
+    const runRes = await request(port, {
+      method: 'POST',
+      path: `/api/schedules/${created.id}/run`,
+      headers: { Host: host, 'Content-Type': 'application/json' },
+      body: '{}'
+    });
+    const ran = JSON.parse(runRes.body).schedule;
+    assert.equal(ran.lastStatus, 'success');
+    assert.equal(ran.runCount, 1);
+    assert.match(ran.lastResultPreview, /当前项目目录分析报告/);
+
+    // Natural language schedule creation via local autonomous engine
+    const nlSched = await agent.run('创建定时任务: 每 45 分钟 执行系统健康巡检');
+    assert.match(nlSched.finalAnswer, /后台定时自动化任务已创建/);
+
+    // Clean up all schedules created in test
+    const listRes = await request(port, { path: '/api/schedules', headers: { Host: host } });
+    for (const sc of JSON.parse(listRes.body).schedules) {
+      await request(port, { method: 'DELETE', path: `/api/schedules/${sc.id}`, headers: { Host: host } });
+    }
+  } finally {
+    server.close();
+  }
+});
+
+test('28. Webhook Notification (Feishu/DingTalk/Generic) & Full Knowledge/Skills/Schedules Backup & Restore', async () => {
+  // 1) Start a local mock webhook receiver
+  let receivedPayload = null;
+  const mockWebhook = http.createServer((req, res) => {
+    let raw = '';
+    req.on('data', c => { raw += c; });
+    req.on('end', () => {
+      receivedPayload = JSON.parse(raw || '{}');
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ errcode: 0, errmsg: 'ok' }));
+    });
+  });
+  await new Promise(r => mockWebhook.listen(0, '127.0.0.1', r));
+  const whPort = mockWebhook.address().port;
+  const whUrl = `http://127.0.0.1:${whPort}/feishu.cn/hook`;
+
+  const server = createServer({});
+  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  const { port } = server.address();
+  const host = `127.0.0.1:${port}`;
+
+  try {
+    // Test webhook via REST endpoint
+    const whRes = await request(port, {
+      method: 'POST',
+      path: '/api/config/webhook/test',
+      headers: { Host: host, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ webhookUrl: whUrl, title: '巡检告警', content: '磁盘空间正常', save: true })
+    });
+    assert.equal(whRes.status, 200);
+    const whJson = JSON.parse(whRes.body);
+    assert.equal(whJson.ok, true);
+    assert.equal(whJson.channel, '飞书 (Feishu)');
+    assert.equal(receivedPayload.msg_type, 'text');
+    assert.match(receivedPayload.content.text, /磁盘空间正常/);
+
+    // Test notify_send via natural language in local autonomous engine
+    const nlNotify = await agent.run('发送通知: 任务已全部完成');
+    assert.match(nlNotify.finalAnswer, /Webhook 通知已发送/);
+
+    // 2) Full Backup & Restore round-trip
+    const backupRes = await request(port, { path: '/api/backup', headers: { Host: host } });
+    assert.equal(backupRes.status, 200);
+    const bundle = JSON.parse(backupRes.body);
+    assert.equal(bundle.schema, 'aetherclaw-backup/v1');
+    assert.ok(Array.isArray(bundle.semanticMemories));
+    assert.ok(Array.isArray(bundle.skills));
+
+    bundle.semanticMemories.unshift({
+      content: '备份恢复测试专用记忆条目_2026',
+      category: 'backup_test',
+      tags: ['backup']
+    });
+    const restoreRes = await request(port, {
+      method: 'POST',
+      path: '/api/backup/restore',
+      headers: { Host: host, 'Content-Type': 'application/json' },
+      body: JSON.stringify(bundle)
+    });
+    assert.equal(restoreRes.status, 200);
+    const restoreJson = JSON.parse(restoreRes.body);
+    assert.equal(restoreJson.success, true);
+    assert.ok(restoreJson.memoriesAdded >= 1);
+
+    // Clean up restored test memory and webhookUrl
+    const addedMem = restoreJson.memories.find(m => m.content === '备份恢复测试专用记忆条目_2026');
+    if (addedMem) memory.deleteMemory(addedMem.id);
+    config.update({ webhookUrl: '' });
+  } finally {
+    mockWebhook.close();
+    server.close();
+  }
+});

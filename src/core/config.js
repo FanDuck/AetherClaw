@@ -67,6 +67,7 @@ const DEFAULT_CONFIG = {
   sandboxNetwork: process.env.SANDBOX_NETWORK === 'bridge' ? 'bridge' : 'none',
   behindTlsProxy: process.env.BEHIND_TLS_PROXY === 'true',
   allowInsecureHttp: process.env.ALLOW_INSECURE_HTTP === 'true',
+  webhookUrl: process.env.WEBHOOK_URL || '',
   shellTimeoutMs: envInt('SHELL_TIMEOUT_MS', 15000),
   llmTimeoutMs: envInt('LLM_TIMEOUT_MS', 60000),
   autoEvolveSkills: process.env.AUTO_EVOLVE_SKILLS !== 'false',
@@ -167,6 +168,7 @@ class ConfigManager {
     return {
       ...rest,
       hasApiKey: hasKey,
+      hasWebhook: Boolean(rest.webhookUrl && String(rest.webhookUrl).trim().length > 0),
       apiKeyMasked: hasKey ? maskKey(apiKey) : '',
       apiProfiles: safeProfiles
     };
@@ -214,6 +216,13 @@ class ConfigManager {
       next.sandboxNetwork = partial.sandboxNetwork;
     }
     if (typeof partial.behindTlsProxy === 'boolean') next.behindTlsProxy = partial.behindTlsProxy;
+    if (typeof partial.webhookUrl === 'string') {
+      const wUrl = partial.webhookUrl.trim();
+      if (wUrl !== '' && !isValidHttpUrl(wUrl)) {
+        throw Object.assign(new Error('Webhook URL 必须是合法的 http(s) 地址'), { status: 400 });
+      }
+      next.webhookUrl = wUrl;
+    }
     if (typeof partial.maxSteps === 'number' && Number.isFinite(partial.maxSteps)) {
       next.maxSteps = Math.max(1, Math.min(20, Math.round(partial.maxSteps)));
     }
@@ -492,6 +501,92 @@ class ConfigManager {
       ? json.data.map(m => m.id || m.name).filter(Boolean)
       : (Array.isArray(json.models) ? json.models.map(m => m.name || m.id).filter(Boolean) : []);
     return list.slice(0, 60);
+  }
+
+  /**
+   * 发送 Webhook 消息推送（自适应识别：飞书 Feishu / 钉钉 DingTalk / 企业微信 WeCom / Bark / 通用 Webhook）
+   */
+  async sendWebhookNotification({ title = 'AetherClaw 通知', content = '', webhookUrl } = {}) {
+    const targetUrl = String(webhookUrl || this.config.webhookUrl || '').trim();
+    if (!targetUrl) {
+      return {
+        ok: false,
+        status: 400,
+        diagnosis: '未配置 Webhook 地址。请在右上角「API 设置 -> Webhook 消息推送」中填入飞书、钉钉、企业微信或自定义 Webhook URL。'
+      };
+    }
+    if (!isValidHttpUrl(targetUrl)) {
+      return {
+        ok: false,
+        status: 400,
+        diagnosis: 'Webhook 地址格式不正确，必须以 http:// 或 https:// 开头。'
+      };
+    }
+
+    const lower = targetUrl.toLowerCase();
+    const fullText = `🦅 【${title}】\n${String(content || '').trim()}`;
+    let channel = 'Generic Webhook';
+    let payload;
+
+    if (lower.includes('feishu.cn') || lower.includes('larksuite.com')) {
+      channel = '飞书 (Feishu)';
+      payload = { msg_type: 'text', content: { text: fullText } };
+    } else if (lower.includes('dingtalk.com')) {
+      channel = '钉钉 (DingTalk)';
+      payload = { msgtype: 'text', text: { content: fullText } };
+    } else if (lower.includes('weixin.qq.com')) {
+      channel = '企业微信 (WeCom)';
+      payload = { msgtype: 'text', text: { content: fullText } };
+    } else if (lower.includes('api.day.app')) {
+      channel = 'Bark';
+      payload = { title: `🦅 ${title}`, body: String(content || '').trim() };
+    } else {
+      payload = {
+        text: fullText,
+        content: fullText,
+        title,
+        message: String(content || '').trim(),
+        source: 'AetherClaw',
+        timestamp: new Date().toISOString()
+      };
+    }
+
+    const t0 = Date.now();
+    try {
+      const res = await fetch(targetUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json; charset=utf-8' },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(8000)
+      });
+      const latencyMs = Date.now() - t0;
+      const bodyText = await res.text();
+      if (!res.ok) {
+        return {
+          ok: false,
+          status: res.status,
+          channel,
+          latencyMs,
+          diagnosis: `❌ Webhook 推送失败 (HTTP ${res.status})：${bodyText.slice(0, 160)}`
+        };
+      }
+      return {
+        ok: true,
+        status: res.status,
+        channel,
+        latencyMs,
+        diagnosis: `✅ 已成功推送至 ${channel}（耗时 ${latencyMs} ms）！`
+      };
+    } catch (err) {
+      const latencyMs = Date.now() - t0;
+      return {
+        ok: false,
+        status: 0,
+        channel,
+        latencyMs,
+        diagnosis: `🌐 Webhook 请求失败：${err.message}`
+      };
+    }
   }
 
   _recordProfileTestResult(profileId, ok, latencyMs) {
